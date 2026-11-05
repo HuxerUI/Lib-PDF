@@ -48,10 +48,10 @@ int main() { return Run([] {
   CHECK(bitmap.pixels[annotation_pixel + 2] > 240 && bitmap.pixels[annotation_pixel] < 15);
   const auto without_annotations = doc.Render(0, {.width = 300, .annotations = false});
   CHECK(without_annotations.pixels[annotation_pixel] == 255 && without_annotations.pixels[annotation_pixel + 2] == 255);
-  const auto rotated = doc.Render(0, {.width = 400, .rotation = Rotation::Clockwise90});
+  const auto rotated = doc.Render(0, {.width = 400, .rotation = PageRotation::Clockwise90});
   CHECK(rotated.width == 400 && rotated.height == 300);
-  CHECK(doc.Render(0, {.width = 300, .rotation = Rotation::Clockwise180}).height == 400);
-  CHECK(doc.Render(0, {.width = 400, .rotation = Rotation::Clockwise270}).height == 300);
+  CHECK(doc.Render(0, {.width = 300, .rotation = PageRotation::Clockwise180}).height == 400);
+  CHECK(doc.Render(0, {.width = 400, .rotation = PageRotation::Clockwise270}).height == 300);
   const auto png = bitmap.ToPng();
   CHECK(png.size() > bitmap.pixels.size());
   CHECK(png[0] == std::byte{137} && png[1] == std::byte{'P'});
@@ -75,14 +75,14 @@ int main() { return Run([] {
   CHECK(unicode_doc.PageCount() == 2 && !unicode_doc.Text(0).empty());
 
   try { (void)PdfDocument::Open(fixtures / "encrypted.pdf"); CHECK(false); }
-  catch (const PdfError& error) { CHECK(error.Code() == PdfErrorCode::Password); }
+  catch (const PdfException& error) { CHECK(error.Code() == PdfErrorCode::Password); }
   try { (void)PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "wrong"}); CHECK(false); }
-  catch (const PdfError& error) { CHECK(error.Code() == PdfErrorCode::Password); }
+  catch (const PdfException& error) { CHECK(error.Code() == PdfErrorCode::Password); }
   CHECK(PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "huxerui"}).Text(0) == doc.Text(0));
   CHECK(PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "owner"}).PageCount() == 2);
-  Throws<PdfError>([&] { (void)PdfDocument::Open(fixtures / "missing.pdf"); });
-  Throws<PdfError>([] { (void)PdfDocument::FromBytes({}); });
-  Throws<PdfError>([] { const std::byte bad[]{std::byte{'x'}}; (void)PdfDocument::FromBytes(bad); });
+  Throws<PdfException>([&] { (void)PdfDocument::Open(fixtures / "missing.pdf"); });
+  Throws<PdfException>([] { (void)PdfDocument::FromBytes({}); });
+  Throws<PdfException>([] { const std::byte bad[]{std::byte{'x'}}; (void)PdfDocument::FromBytes(bad); });
   Throws<std::invalid_argument>([&] { (void)PdfDocument::Open(fixtures / "sample.pdf", {.max_bytes = 1}); });
   Throws<std::invalid_argument>([&] { (void)PdfDocument::Open(fixtures / "sample.pdf", {.password = std::string("a\0b", 3)}); });
   Throws<std::out_of_range>([&] { (void)doc.Size(-1); });
@@ -91,7 +91,7 @@ int main() { return Run([] {
   Throws<std::out_of_range>([&] { (void)doc.Search(2, "hello"); });
   Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.width = 0}); });
   Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.width = std::numeric_limits<int>::max()}); });
-  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.rotation = static_cast<Rotation>(9)}); });
+  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.rotation = static_cast<PageRotation>(9)}); });
   Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.background_rgb = 0xFFFFFFFF}); });
   Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.max_pixels = 10}); });
   Throws<std::invalid_argument>([&] { (void)doc.Metadata(std::string("a\0b", 3)); });

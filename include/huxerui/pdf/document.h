@@ -12,11 +12,12 @@
 
 namespace huxerui::pdf {
 
-enum class PdfErrorCode { Unknown, File, Format, Password, Security, Page };
+enum class PdfErrorCode { Unknown, File, Format, Password, Security, Page, Limit, NotReady, Closed, Superseded };
 
-class PdfError : public std::runtime_error {
+/// Exception used by the standalone synchronous API. UI sessions report PdfError values instead.
+class PdfException : public std::runtime_error {
 public:
-  PdfError(PdfErrorCode code, const std::string& message) : std::runtime_error(message), code_(code) {}
+  PdfException(PdfErrorCode code, const std::string& message) : std::runtime_error(message), code_(code) {}
   [[nodiscard]] PdfErrorCode Code() const noexcept { return code_; }
 private:
   PdfErrorCode code_;
@@ -25,19 +26,21 @@ private:
 struct OpenOptions {
   std::string password;
   std::size_t max_bytes = 256U * 1024U * 1024U;
+  bool operator==(const OpenOptions&) const = default;
 };
 
 /// Clockwise rotation applied in addition to the document's own page rotation.
-enum class Rotation { None, Clockwise90, Clockwise180, Clockwise270 };
+enum class PageRotation { None, Clockwise90, Clockwise180, Clockwise270 };
 
 struct PageSize {
   double width = 0;  ///< PDF points (1/72 inch), including intrinsic page rotation.
   double height = 0;
+  bool operator==(const PageSize&) const = default;
 };
 
 struct RenderOptions {
   int width = 1024;  ///< Output pixel width; height preserves the rotated aspect ratio.
-  Rotation rotation = Rotation::None;
+  PageRotation rotation = PageRotation::None;
   bool annotations = true;
   std::uint32_t background_rgb = 0xFFFFFF; ///< Opaque sRGB background, 0xRRGGBB.
   std::size_t max_pixels = 32U * 1024U * 1024U;
@@ -57,16 +60,19 @@ struct SearchOptions {
   bool match_case = false;
   bool whole_word = false;
   std::size_t max_results = 1000;
+  bool operator==(const SearchOptions&) const = default;
 };
 
 struct TextRect {
   double left = 0, bottom = 0, right = 0, top = 0; ///< Unrotated PDF page coordinates.
+  bool operator==(const TextRect&) const = default;
 };
 
 struct SearchMatch {
   int start = 0;  ///< PDFium character index, not a UTF-8 byte or UTF-16 offset.
   int count = 0;
   std::vector<TextRect> bounds;
+  bool operator==(const SearchMatch&) const = default;
 };
 
 /// Immutable, copyable document handle. Copies share document ownership.

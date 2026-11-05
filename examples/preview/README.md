@@ -24,7 +24,11 @@ The **Document** panel displays metadata and searches the current page. An activ
 query is repeated when changing pages. The **Page text** panel supports native
 selection and copying, with a 12,000-byte display limit. Search reports match
 counts; it does not draw highlights. File opening, parsing, rendering, text
-extraction, and search use asynchronous tasks/workers to keep the UI responsive.
+extraction, and search use the library's `UsePdf`/`PdfSession` asynchronous API.
+The app owns `State<PdfSource>` and `State<PdfOptions>`, composes `PdfPage`, and
+awaits typed results for text/search. It has no manual PDF parsing or RunWorker
+pipeline. Display controls are application-owned intent; status and the published
+page are read from `Snapshot()`.
 The sample includes a landscape page and a yellow annotation that can be toggled.
 
 ## Standalone build

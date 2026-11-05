@@ -7,7 +7,7 @@
   <key>CFBundleIdentifier</key><string>org.huxerui.lib.pdf.preview</string>
   <key>CFBundleExecutable</key><string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleShortVersionString</key><string>0.2.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

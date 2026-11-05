@@ -39,7 +39,7 @@ std::shared_ptr<Runtime> GetRuntime() {
     case FPDF_ERR_PAGE: code = PdfErrorCode::Page; break;
     default: break;
   }
-  throw PdfError(code, std::string(operation) + " (PDFium error " + std::to_string(error) + ")");
+  throw PdfException(code, std::string(operation) + " (PDFium error " + std::to_string(error) + ")");
 }
 
 void CheckInput(std::size_t size, const OpenOptions& options) {
@@ -75,17 +75,17 @@ struct PdfDocument::Impl {
 
 PdfDocument PdfDocument::Open(const std::filesystem::path& path, OpenOptions options) {
   std::ifstream stream(path, std::ios::binary | std::ios::ate);
-  if (!stream) throw PdfError(PdfErrorCode::File, "Cannot open PDF file");
+  if (!stream) throw PdfException(PdfErrorCode::File, "Cannot open PDF file");
   const auto end = stream.tellg();
   if (end < 0 || static_cast<std::uintmax_t>(end) > std::numeric_limits<std::size_t>::max()
       || static_cast<std::uintmax_t>(end) > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max()))
-    throw PdfError(PdfErrorCode::File, "Cannot determine PDF file size");
+    throw PdfException(PdfErrorCode::File, "Cannot determine PDF file size");
   const auto size = static_cast<std::size_t>(end);
   CheckInput(size, options);
   std::vector<std::byte> bytes(size);
   stream.seekg(0);
   if (size && !stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size)))
-    throw PdfError(PdfErrorCode::File, "Cannot read complete PDF file");
+    throw PdfException(PdfErrorCode::File, "Cannot read complete PDF file");
   return FromOwnedBytes(std::move(bytes), options);
 }
 
@@ -95,7 +95,7 @@ PdfDocument PdfDocument::FromBytes(std::span<const std::byte> bytes, OpenOptions
 }
 
 PdfDocument PdfDocument::FromOwnedBytes(std::vector<std::byte> bytes, const OpenOptions& options) {
-  if (bytes.empty()) throw PdfError(PdfErrorCode::Format, "Empty PDF input");
+  if (bytes.empty()) throw PdfException(PdfErrorCode::Format, "Empty PDF input");
   auto impl = std::make_shared<Impl>();
   impl->bytes = std::move(bytes);
   std::lock_guard lock(impl->runtime->mutex);
@@ -103,7 +103,7 @@ PdfDocument PdfDocument::FromOwnedBytes(std::vector<std::byte> bytes, const Open
       options.password.empty() ? nullptr : options.password.c_str());
   if (!impl->document) Fail("Cannot open PDF document");
   impl->pages = FPDF_GetPageCount(impl->document);
-  if (impl->pages <= 0) throw PdfError(PdfErrorCode::Page, "PDF has no readable pages");
+  if (impl->pages <= 0) throw PdfException(PdfErrorCode::Page, "PDF has no readable pages");
   return PdfDocument(std::move(impl));
 }
 
@@ -119,7 +119,7 @@ PageSize PdfDocument::Size(int page) const {
   FS_SIZEF size{};
   if (!FPDF_GetPageSizeByIndexF(impl_->document, page, &size)) Fail("Cannot read PDF page size");
   if (!std::isfinite(size.width) || !std::isfinite(size.height) || size.width <= 0 || size.height <= 0)
-    throw PdfError(PdfErrorCode::Page, "Invalid PDF page dimensions");
+    throw PdfException(PdfErrorCode::Page, "Invalid PDF page dimensions");
   return {size.width, size.height};
 }
 
@@ -130,10 +130,10 @@ std::string PdfDocument::Metadata(std::string_view tag) const {
   std::lock_guard lock(impl_->runtime->mutex);
   const auto size = FPDF_GetMetaText(impl_->document, key.c_str(), nullptr, 0);
   if (size <= 2) return {};
-  if (size > 16U * 1024U * 1024U || size % 2) throw PdfError(PdfErrorCode::Format, "Invalid PDF metadata size");
+  if (size > 16U * 1024U * 1024U || size % 2) throw PdfException(PdfErrorCode::Format, "Invalid PDF metadata size");
   std::vector<unsigned short> buffer(size / 2);
   if (FPDF_GetMetaText(impl_->document, key.c_str(), buffer.data(), size) != size)
-    throw PdfError(PdfErrorCode::Format, "Cannot read PDF metadata");
+    throw PdfException(PdfErrorCode::Format, "Cannot read PDF metadata");
   return detail::FromUtf16(buffer.data(), buffer.size() - 1);
 }
 
@@ -155,7 +155,7 @@ PdfBitmap PdfDocument::Render(int index, RenderOptions options) const {
   const auto page = LoadPage(impl_->document, index);
   ScopedFPDFBitmap bitmap(FPDFBitmap_CreateEx(result.width, result.height, FPDFBitmap_BGRA,
       result.pixels.data(), result.width * 4));
-  if (!bitmap) throw PdfError(PdfErrorCode::Unknown, "Cannot allocate PDF bitmap");
+  if (!bitmap) throw PdfException(PdfErrorCode::Unknown, "Cannot allocate PDF bitmap");
   FPDFBitmap_FillRect(bitmap.get(), 0, 0, result.width, result.height, 0xFF000000U | options.background_rgb);
   FPDF_RenderPageBitmap(bitmap.get(), page.get(), 0, 0, result.width, result.height, rotation,
       options.annotations ? FPDF_ANNOT : 0);
@@ -169,10 +169,10 @@ std::string PdfDocument::Text(int index) const {
   const auto page = LoadPage(impl_->document, index);
   const auto text = LoadText(page.get());
   const int count = FPDFText_CountChars(text.get());
-  if (count < 0 || count > 16 * 1024 * 1024) throw PdfError(PdfErrorCode::Page, "Invalid PDF text size");
+  if (count < 0 || count > 16 * 1024 * 1024) throw PdfException(PdfErrorCode::Page, "Invalid PDF text size");
   std::vector<unsigned short> buffer(static_cast<std::size_t>(count) * 2 + 1);
   const int written = FPDFText_GetText(text.get(), 0, count, buffer.data());
-  if (written < 0 || static_cast<std::size_t>(written) > buffer.size()) throw PdfError(PdfErrorCode::Page, "Cannot extract PDF text");
+  if (written < 0 || static_cast<std::size_t>(written) > buffer.size()) throw PdfException(PdfErrorCode::Page, "Cannot extract PDF text");
   return written > 0 ? detail::FromUtf16(buffer.data(), static_cast<std::size_t>(written) - 1) : std::string{};
 }
 
@@ -187,7 +187,7 @@ std::vector<SearchMatch> PdfDocument::Search(int index, std::string_view query, 
   const auto text = LoadText(page.get());
   const unsigned long flags = (options.match_case ? FPDF_MATCHCASE : 0) | (options.whole_word ? FPDF_MATCHWHOLEWORD : 0);
   ScopedFPDFTextFind search(FPDFText_FindStart(text.get(), wide.data(), flags, 0));
-  if (!search) throw PdfError(PdfErrorCode::Page, "Cannot start PDF text search");
+  if (!search) throw PdfException(PdfErrorCode::Page, "Cannot start PDF text search");
   std::vector<SearchMatch> matches;
   while (matches.size() < options.max_results && FPDFText_FindNext(search.get())) {
     SearchMatch match{FPDFText_GetSchResultIndex(search.get()), FPDFText_GetSchCount(search.get()), {}};

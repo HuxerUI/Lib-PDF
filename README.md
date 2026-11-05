@@ -3,15 +3,16 @@
 [简体中文](README.zh-CN.md)
 
 Native PDF content for [HuxerUI](https://github.com/HuxerUI/HuxerUI), powered by
-[PDFium](https://pdfium.googlesource.com/pdfium/). C++20, CMake target
-`HuxerUI::PDF` (`huxerui_pdf`), namespace `huxerui::pdf`.
+[PDFium](https://pdfium.googlesource.com/pdfium/). C++20; target `HuxerUI::PDF`;
+namespace `huxerui::pdf`. The 0.2 API follows the session and presentation patterns
+used by Scave's Camera and Media libraries.
 
-- Open files or owned memory, including password-protected PDFs and Unicode paths.
-- Read page sizes, metadata, and UTF-8 text; search with case/whole-word options and character bounds.
-- Render RGBA8 images with rotation, annotation visibility, and a configurable opaque background.
-- Display prepared page images or use a viewer with paging, zoom, and two-axis scrolling.
-- Run document operations without HuxerUI; prepare immutable images on a worker for UI composition.
-- Fixed PDFium dependency with SHA-256 verification; support an explicit SDK for offline/cross builds.
+- `PdfSource`: explicit packaged resource, raw asset, File, FileReference, or immutable document.
+- `UsePdf(source, options)`: retains a composition-owned session and applies controlled display intent.
+- `PdfSession::Snapshot()`: observable metadata, last published page, status, and typed error.
+- `PdfPage(session, properties)`: presentation only, using ordinary HuxerUI layout.
+- `ReadTextAsync`, `SearchAsync`, and `RenderAsync`: library-scheduled `Task<PdfResult<T>>` operations.
+- Independent synchronous document API when HuxerUI is not needed.
 
 ## Quick start
 
@@ -26,78 +27,140 @@ huxerui_pdf_copy_runtime(your_app) # Deploy pdfium.dll beside the Windows execut
 #include <huxerui/pdf.h>
 
 using namespace huxerui;
-using namespace huxerui::pdf;
 
-// Open once and retain this handle in your application model.
-auto document = PdfDocument::Open("guide.pdf");
-// During composition, inside a bounded layout:
+[[huxerui::composable]]
 View Reader() {
-  return PdfViewer(document).With(Grow{});
+  auto options = UseState(pdf::PdfOptions{});
+  auto session = pdf::UsePdf(pdf::PdfSource(File("/absolute/path/to/guide.pdf")), options.Get());
+  const auto state = session.Snapshot();
+  const bool next = state.status == pdf::PdfStatus::Ready && state.metadata
+      && options.Get().page + 1 < state.metadata->pages;
+  return Column{
+    Button("Next").OnClick([options] {
+      options.Update([](pdf::PdfOptions& value) { ++value.page; });
+    }).With(Enabled{next}),
+    pdf::PdfPage(session).With(Grow{}),
+  }.With(Grow{}, CrossAlign(CrossAxisAlignment::Stretch));
 }
 ```
 
-`PdfViewer` keeps one rendered page image and rerenders only when the document,
-page, width, or raster scale changes. Its navigation and zoom operations render
-synchronously. Page width is in logical UI units; `render_scale` controls raster
-resolution. The viewer exposes errors as text. Defaults are page 0, width 640,
-zoom 1, raster scale 1.5, and zoom range 0.25–4.
+Use an accessible native File path or a file-picker-provided FileReference.
+No `Install` hook is needed: immutable document handles own the shared PDFium
+runtime, and HuxerUI's TaskScope owns the session's asynchronous work.
 
-For large pages or custom navigation, prepare on your application's worker queue:
+## Controlled input and observed state
+
+`PdfOptions` contains zero-based `page`, positive `zoom`, `page_width` (640 logical
+units by default), `render_scale` (1.5), `PageRotation`, annotations, opaque
+`background_rgb`, open options, and a `reload` token. Changes are applied after
+composition commits. Page/display changes reuse the open document; source,
+password/open-option, or reload-token changes reopen it.
+For an already-open immutable PdfDocument source, reload reuses that supplied
+document and prepares its output again; open options apply to byte/file sources.
+
+`Snapshot()` subscribes an active composition. It returns a point-in-time value:
+`Empty`, `Loading`, `Rendering`, `Ready`, `Failed`, or `Closed`; optional metadata,
+optional output, and optional `PdfError`. Output identifies the page/settings that
+actually finished rendering. Input changes can precede publication; input intent
+does not imply that the new page has already been rendered.
+
+Source replacement clears old metadata and output. Rendering another page keeps
+the previous published page until success; a render failure preserves it. A page
+outside the newly loaded document reports `Page` at the `Render` stage.
+
+`PdfPage` supplies no toolbar, scrolling, dialogs, loading text, or error UI. It
+draws nothing without output, and otherwise fits the published image into bounded
+layout. The default is centered `ImageFit::Contain`; properties only change
+presentation. Multiple page views can share one session.
+
+Zoom changes the published image's intrinsic logical size and raster resolution.
+For a scrollable zoomed page, frame `PdfPage` to
+`state.output->image.IntrinsicSize()` and wrap it in application-owned scroll views,
+as the demo does. Fitting a page into a fixed viewport continues to obey its fit
+policy. PDF dimensions in `output.size` remain in points (1/72 inch).
+
+## Source identity and lifetime
+
+`PdfSource` accepts `RawResource`, `RawAsset`, `File`, `FileReference`, or
+`PdfDocument` through explicit constructors. The default source is empty and
+clears the session. No string/URL guessing, implicit downloads, or file watching
+occurs.
+
+Equal resource/asset/File/document values preserve the current document during
+recomposition. Change `reload` to reread an unchanged File, retry a failed load,
+or reopen with the same options. FileReference sources retain the access grant;
+copies share source identity. Retain the constructed PdfSource instead of
+reconstructing a FileReference source every composition.
+
+`UsePdf` owns the active session lifetime. Copies of PdfSession share identity
+and state; they do not keep it active after its owner unmounts. Removing only a
+PdfPage does not close the session. Replaced/unmounted requests are canceled and
+obsolete results cannot publish; native work already running may finish before
+releasing its document. All handle access belongs to the owning UI thread and
+application. Reads/commands throw `std::logic_error` on misuse. After owner unmount,
+the live application's retained handle reports Closed; after application shutdown,
+its SDK state lifetime has expired and access is invalid.
+
+## Asynchronous document operations
+
+Start from a UI event or lifecycle task, using `UseTaskScope()`:
 
 ```cpp
-// Worker thread. PdfDocument copies share ownership; input files can be closed/deleted after Open.
-auto prepared = PreparePdfPage(document, 0, {.width = 720, .render_scale = 2});
-// UI thread, after delivering prepared through application-owned state:
-View page = PdfPage(prepared);
+tasks.Launch([session, notice]() -> Task<void> {
+  auto found = co_await session.SearchAsync(0, "HuxerUI", {.whole_word = true});
+  notice = found.Succeeded()
+      ? std::to_string(found.Value().size()) + " matches"
+      : found.Error().message;
+});
 ```
 
-The convenience overload `PdfPage(document, page, options)` also renders
-synchronously. Retain `PdfPageImage` across recompositions to avoid repeated work.
-`PdfPage` has no scrolling; wrap it in bounded scroll views as appropriate.
+`ReadTextAsync(page)` yields UTF-8 text, `SearchAsync(page, query, options)` yields
+character indices and rectangles, and `RenderAsync(page, options)` yields owned
+RGBA8 pixels. Work runs on library-managed workers and awaits resume on the
+owning UI sequence. These operations do not alter display options or replace the
+session's output/error. They can run once a document is loaded, including while
+its display is rendering.
 
-## Document API
+Failures use the SDK's `Result<T, PdfError>` (`PdfResult<T>`). Check `Succeeded()`
+before accessing `Value()` or `Error()`. Error code/stage are stable categories;
+message is diagnostic text. NotReady/Closed report unavailable session work.
+Replacing/reloading the source before an operation completes yields Superseded;
+changing the displayed page does not invalidate an explicit page request. Tasks
+are lazy and check readiness when executed. Cancellation suppresses delivery.
 
-The independent header `<huxerui/pdf/document.h>` does not include HuxerUI or PDFium
-headers. All page indices are **zero-based** and page dimensions use PDF points
-(1/72 inch), with intrinsic page rotation already applied.
+Invalid scalar options/query encoding throw synchronously. Document-dependent
+page bounds yield a typed Page failure. No OCR is performed. Search rectangles
+use unrotated PDF coordinates with bottom-left origin; indices are PDFium
+character indices, neither UTF-8 byte offsets nor UTF-16 offsets.
+
+## Standalone document API
+
+`<huxerui/pdf/document.h>` does not include HuxerUI/PDFium headers:
 
 ```cpp
-auto doc = PdfDocument::Open("protected.pdf", {.password = "secret"});
-int pages = doc.PageCount();
-auto size = doc.Size(0);
-std::string title = doc.Metadata("Title");
-std::string text = doc.Text(0);
-auto hits = doc.Search(0, "HuxerUI", {.match_case = true, .whole_word = true});
-auto bitmap = doc.Render(0, {.width = 1440, .rotation = huxerui::pdf::Rotation::Clockwise90});
-auto png = bitmap.ToPng(); // std::vector<std::byte>, lossless, uncompressed DEFLATE.
+auto doc = huxerui::pdf::PdfDocument::Open("protected.pdf", {.password = "secret"});
+auto text = doc.Text(0);
+auto matches = doc.Search(0, "PDF");
+auto pixels = doc.Render(0, {.width = 1440,
+    .rotation = huxerui::pdf::PageRotation::Clockwise90});
+auto png = pixels.ToPng();
 ```
 
-`FromBytes(std::span<const std::byte>, OpenOptions)` copies its input. Document
-handles share immutable data. File reads support native `std::filesystem::path`,
-including Windows Unicode names. Passwords follow PDFium's UTF-8 password rules.
+These explicitly synchronous methods may run on workers. Input memory is copied,
+document handles share ownership, and native Unicode paths are supported. Backend
+failures throw `PdfException`, invalid options `std::invalid_argument`, and bad
+page indices `std::out_of_range`. All library PDFium calls, including destruction,
+share a mutex. Do not initialize/destroy or concurrently call PDFium independently.
 
-Search results contain PDFium character indices and bounding rectangles in
-**unrotated PDF page coordinates**, with the origin at bottom-left. Indices are
-neither UTF-8 byte offsets nor UTF-16 offsets; rectangles need transformation for
-rotated/scaled UI highlights. Search uses PDFium's matching semantics. Empty
-queries return no results. Text extraction does not perform OCR.
+Defaults limit input to 256 MiB, display rendering to 32 million pixels (hard ceiling
+64 million and 32768 per axis), extracted text to 16 million characters per page,
+and search to 1000 results. Resource/reference sources are read in bounded chunks
+with the input limit applied before accepting excess bytes.
 
-`PdfError::Code()` distinguishes file, format, password, security, page, and unknown
-backend failures. Invalid options throw `std::invalid_argument`; invalid page
-indices throw `std::out_of_range`. The default input limit is 256 MiB, render limit
-32 million pixels (hard ceiling 64 million and 32768 pixels per axis), text limit
-16 million characters per page, and search limit 1000 matches. Lower the input,
-pixel, and result limits through options when appropriate.
+## Build, demo, and tests
 
-All PDFium calls made by Lib-PDF, including handle destruction, share a mutex.
-Document APIs can therefore run on workers concurrently, with backend calls
-serialized. Do not independently initialize/destroy PDFium or use its C API
-concurrently with this library.
-
-## Build and test
-
-Requires CMake 3.20+ and C++20. Native components require HuxerUI; the verified
-framework revision is `cadb1696cfa7b87d9d2d316b3ecba07b85a46962`.
+Requires CMake 3.20+, C++20, and HuxerUI for native components. Verified SDK revision:
+`cadb1696cfa7b87d9d2d316b3ecba07b85a46962`.
 
 ```sh
 cmake -S . -B build -DHUXERUI_HOME=/path/to/HuxerUI \
@@ -107,19 +170,15 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Run `example_pdf` from the build output for the bundled three-page PDF. The demo
-supports opening local/password PDFs, navigation, zoom, rotation, annotations,
-search, text inspection, and theme switching. It follows the other Lib projects'
-`examples/preview/{src,resources,platform}` structure and can also build independently:
+The desktop [demo](examples/preview/README.md) provides file/password opening,
+paging, zoom, rotation, annotations, search, text inspection and theme switching.
+It uses only the session API for PDF work, with no caller-side RunWorker pipeline.
+It follows `examples/preview/{src,resources,platform}` and builds independently:
 
 ```sh
 cmake -S examples/preview -B build-demo -DHUXERUI_HOME=/path/to/HuxerUI
 cmake --build build-demo --config Release --target example_pdf --parallel
 ```
-
-See [the demo README](examples/preview/README.md) for layout and run instructions.
-Headless interaction tests exercise page changes,
-disabled navigation, and zoom when `HuxerUI::testing` is available.
 
 Without UI dependencies:
 
@@ -129,9 +188,12 @@ cmake --build build-core --config Release --parallel
 ctest --test-dir build-core -C Release --output-on-failure
 ```
 
-CI checks document operations on Windows, Linux, and macOS, and builds/tests the
-native component and preview on Windows. HuxerUI project-plan and library-graph
-discovery do not enable compilers or download PDFium.
+CI checks the document backend on Windows/Linux/macOS and the native session/demo
+on Windows. Headless tests cover controlled updates, source reloads, typed async
+results, wrong-thread access, request replacement and unmount behavior, plus the
+demo's real packaged resources. Compiler-free project-plan/library-graph discovery
+does not download PDFium. Design references are recorded in
+[the Scave API study](docs/API-CONVENTIONS.zh-CN.md).
 
 ## PDFium SDK and deployment
 
