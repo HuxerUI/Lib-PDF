@@ -32,6 +32,8 @@ int main() { return Run([] {
   UiTest ui(app);
   CHECK(ui.Find(UiSelector::Text("Page 1 / 2")).Exists());
   CHECK(ui.Find(UiSelector::Text("100%")).Exists());
+  CHECK(ui.Find(UiSelector::Type<Image>()).One().bounds.width == 300);
+  CHECK(ui.Find(UiSelector::Type<Image>()).One().bounds.height == 400);
   ui.Find(UiSelector::Text("Next")).Tap();
   CHECK(ui.Find(UiSelector::Text("Page 2 / 2")).Exists());
   const auto disabled_next = ui.Find(UiSelector::Text("Next")).One();
@@ -43,6 +45,8 @@ int main() { return Run([] {
   CHECK(ui.Find(UiSelector::Text("Page 1 / 2")).Exists());
   ui.Find(UiSelector::Text("Zoom in")).Tap();
   CHECK(ui.Find(UiSelector::Text("125%")).Exists());
+  CHECK(ui.Find(UiSelector::Type<Image>()).One().bounds.width == 375);
+  CHECK(ui.Find(UiSelector::Type<Image>()).One().bounds.height == 500);
   ui.Find(UiSelector::Text("Zoom out")).Tap();
   CHECK(ui.Find(UiSelector::Text("100%")).Exists());
   ui.PumpAndSettle();

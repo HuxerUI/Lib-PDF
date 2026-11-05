@@ -8,7 +8,7 @@ if(HUXERUI_PROJECT_PLAN_OUTPUT)
   "name": "Lib-PDF",
   "id": "org.huxerui.lib.pdf",
   "target": "huxerui_pdf",
-  "namespace": "huxerui",
+  "namespace": "huxerui::pdf",
   "publicTarget": "HuxerUI::PDF"
 }
 ]=])

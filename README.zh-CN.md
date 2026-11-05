@@ -48,7 +48,7 @@ View Reader() {
 auto doc = PdfDocument::Open("protected.pdf", {.password = "secret"});
 auto text = doc.Text(0);
 auto matches = doc.Search(0, "HuxerUI", {.whole_word = true});
-auto bitmap = doc.Render(0, {.width = 1440, .rotation = Rotation::Clockwise90});
+auto bitmap = doc.Render(0, {.width = 1440, .rotation = huxerui::pdf::Rotation::Clockwise90});
 auto png = bitmap.ToPng();
 ```
 
@@ -76,7 +76,18 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-运行输出目录中的 `pdf_preview` 可查看内置示例，也可传入 PDF 文件路径作为第一个参数。
+运行输出目录中的 `example_pdf` 可查看内置三页示例。支持打开本地及密码 PDF、翻页、缩放、
+旋转、批注开关、搜索、文本查看与复制、主题切换。demo 采用其他 Lib 的
+`examples/preview/{src,resources,platform}` 结构，并可单独构建：
+
+```sh
+cmake -S examples/preview -B build-demo -DHUXERUI_HOME=/path/to/HuxerUI
+cmake --build build-demo --config Release --target example_pdf --parallel
+```
+
+Windows 运行 `build-demo/Release/example_pdf.exe`。加载与渲染使用后台任务，示例 PDF
+已打包为应用资源，无需源码或测试目录。详见 [demo 说明](examples/preview/README.md)。
+
 无 UI 依赖的构建方式：
 
 ```sh

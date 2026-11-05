@@ -47,3 +47,7 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Check project plan without compiler discovery
         run: cmake -S . -B build-plan -DHUXERUI_PROJECT_PLAN_ONLY=ON -DHUXERUI_PROJECT_PLAN_OUTPUT="${{ github.workspace }}/build-plan/project.json"
+      - name: Configure standalone demo
+        run: cmake -S examples/preview -B build-demo -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DHUXERUI_PDF_PDFIUM_ROOT="${{ github.workspace }}/build/_deps/huxerui_pdfium-src"
+      - name: Check standalone demo project plan
+        run: cmake -S examples/preview -B build-demo-plan -DHUXERUI_PROJECT_PLAN_ONLY=ON -DHUXERUI_PROJECT_PLAN_OUTPUT="${{ github.workspace }}/build-demo-plan/project.json"

@@ -68,7 +68,7 @@ auto size = doc.Size(0);
 std::string title = doc.Metadata("Title");
 std::string text = doc.Text(0);
 auto hits = doc.Search(0, "HuxerUI", {.match_case = true, .whole_word = true});
-auto bitmap = doc.Render(0, {.width = 1440, .rotation = Rotation::Clockwise90});
+auto bitmap = doc.Render(0, {.width = 1440, .rotation = huxerui::pdf::Rotation::Clockwise90});
 auto png = bitmap.ToPng(); // std::vector<std::byte>, lossless, uncompressed DEFLATE.
 ```
 
@@ -107,8 +107,18 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Run `pdf_preview` from the build output for the included two-page PDF, or pass a
-PDF path as its first argument. Headless interaction tests exercise page changes,
+Run `example_pdf` from the build output for the bundled three-page PDF. The demo
+supports opening local/password PDFs, navigation, zoom, rotation, annotations,
+search, text inspection, and theme switching. It follows the other Lib projects'
+`examples/preview/{src,resources,platform}` structure and can also build independently:
+
+```sh
+cmake -S examples/preview -B build-demo -DHUXERUI_HOME=/path/to/HuxerUI
+cmake --build build-demo --config Release --target example_pdf --parallel
+```
+
+See [the demo README](examples/preview/README.md) for layout and run instructions.
+Headless interaction tests exercise page changes,
 disabled navigation, and zoom when `HuxerUI::testing` is available.
 
 Without UI dependencies:

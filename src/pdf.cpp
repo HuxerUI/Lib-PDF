@@ -75,6 +75,8 @@ View PdfViewer(PdfDocument document, PdfViewerOptions options) {
     } catch (const std::exception& error) {
       content = Text(std::string("Cannot render PDF page: ") + error.what());
     }
+    // Passing a ScrollView directly would select its move constructor rather than nest a viewport.
+    View horizontal_page = ScrollView(std::move(content)).ScrollAxis(Axis::Horizontal).With(ScrollBar{});
     return Column{
       Row{
         Button("Previous").OnClick([page, index] { page = index - 1; }).With(Enabled{index > 0}),
@@ -86,7 +88,7 @@ View PdfViewer(PdfDocument document, PdfViewerOptions options) {
         Button("Zoom in").OnClick([zoom, factor, options] { zoom = std::min(options.max_zoom, factor * 1.25F); })
             .With(Enabled{factor < options.max_zoom}),
       }.With(Spacing(8.0F)),
-      ScrollView(ScrollView(std::move(content)).ScrollAxis(Axis::Horizontal).With(ScrollBar{}))
+      ScrollView(std::move(horizontal_page))
           .With(Grow{}, ScrollBar{}),
     }.With(Spacing(12.0F), CrossAlign(CrossAxisAlignment::Stretch));
   });
