@@ -133,6 +133,10 @@ and Web require a matching, independently built SDK or an existing
 `PDFium::PDFium` CMake target. Those cross-platform configurations have not been
 validated by this project.
 
+The pinned macOS SDK requires macOS 13 or later. CMake normalizes and ad-hoc signs
+a build-local copy of its dylib for `@rpath` loading, leaving supplied SDK files
+untouched. Apply your application's distribution signing during packaging.
+
 To build offline:
 
 ```sh

@@ -68,7 +68,7 @@ int main() { return Run([] {
   CHECK(owned.Text(0) == doc.Text(0));
   const auto copy = doc;
   CHECK(copy == doc && owned != doc && copy.Text(1) == doc.Text(1));
-  const auto unicode_path = fs::temp_directory_path() / fs::u8path("huxerui-pdf-测试.pdf");
+  const auto unicode_path = fs::temp_directory_path() / fs::path(u8"huxerui-pdf-测试.pdf");
   fs::copy_file(fixtures / "sample.pdf", unicode_path, fs::copy_options::overwrite_existing);
   const auto unicode_doc = PdfDocument::Open(unicode_path);
   fs::remove(unicode_path);

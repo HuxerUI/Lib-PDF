@@ -62,6 +62,20 @@ if(WIN32)
     endif()
 else()
     find_library(_pdf_library NAMES pdfium PATHS "${_pdf_root}/lib" NO_DEFAULT_PATH REQUIRED)
+    if(APPLE AND _pdf_library MATCHES "\\.dylib$")
+        # The binary distributor uses ./libpdfium.dylib as its install name.
+        # Normalize a build-local copy so consumers can resolve it through RPATH.
+        # Never rewrite an explicitly supplied SDK in place.
+        set(_pdf_local_library "${CMAKE_CURRENT_BINARY_DIR}/pdfium-runtime/libpdfium.dylib")
+        configure_file("${_pdf_library}" "${_pdf_local_library}" COPYONLY)
+        find_program(_pdf_install_name_tool install_name_tool REQUIRED)
+        find_program(_pdf_codesign codesign REQUIRED)
+        execute_process(COMMAND "${_pdf_install_name_tool}" -id "@rpath/libpdfium.dylib" "${_pdf_local_library}"
+            COMMAND_ERROR_IS_FATAL ANY)
+        execute_process(COMMAND "${_pdf_codesign}" --force --sign - "${_pdf_local_library}"
+            COMMAND_ERROR_IS_FATAL ANY)
+        set(_pdf_library "${_pdf_local_library}")
+    endif()
 endif()
 set_target_properties(PDFium::PDFium PROPERTIES
     IMPORTED_LOCATION "${_pdf_library}"

@@ -87,6 +87,8 @@ ctest --test-dir build-core -C Release --output-on-failure
 
 默认下载 PDFium `chromium/8138` 非 V8 版本并校验哈希，覆盖 Windows x64/ARM64、
 Linux glibc x64/ARM64、macOS x64/ARM64/universal。
+固定版本的 macOS SDK 要求 macOS 13 及以上；构建会在输出目录副本上修正动态库加载名并临时签名，
+不会改写用户提供的 SDK。应用分发时需进行正式签名。
 离线构建可设置 `HUXERUI_PDF_FETCH_PDFIUM=OFF` 和
 `HUXERUI_PDF_PDFIUM_ROOT=/path/to/pdfium`。SDK 需包含 `include/`、`lib/`，Windows
 动态库还需 `bin/pdfium.dll`。也可预先定义 `PDFium::PDFium` 目标来提供依赖。
