@@ -1,0 +1,49 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  document:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure standalone document library
+        run: cmake -S . -B build -DHUXERUI_PDF_BUILD_VIEW=OFF -DHUXERUI_PDF_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Independently decode rendered PNG
+        run: python scripts/verify_png.py build/tests/rendered-page.png
+
+  native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out verified HuxerUI revision
+        uses: actions/checkout@v4
+        with:
+          repository: HuxerUI/HuxerUI
+          ref: cadb1696cfa7b87d9d2d316b3ecba07b85a46962
+          path: .cache/HuxerUI
+      - name: Configure component and preview
+        run: cmake -S . -B build -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DHUXERUI_PDF_BUILD_TESTS=ON -DHUXERUI_BUILD_TESTING_LIBRARY=ON -DHUXERUI_PDF_BUILD_EXAMPLES=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Check project plan without compiler discovery
+        run: cmake -S . -B build-plan -DHUXERUI_PROJECT_PLAN_ONLY=ON -DHUXERUI_PROJECT_PLAN_OUTPUT="${{ github.workspace }}/build-plan/project.json"

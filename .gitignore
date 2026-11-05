@@ -1,0 +1,9 @@
+/build*/
+/.cache/
+/.huxerui/
+/.vs/
+/.idea/
+/CMakeUserPresets.json
+/compile_commands.json
+*.user
+*.swp
