@@ -21,7 +21,7 @@ navigation, 25–300% zoom (click the percentage to reset), clockwise rotation,
 annotation visibility, and light/dark themes.
 
 The **Document** panel displays metadata and searches the current page. An active
-query is repeated when changing pages. The **Page text** panel supports native
+query is repeated when changing pages. The **Page text** panel supports text
 selection and copying, with a 12,000-byte display limit. Search reports match
 counts; it does not draw highlights. File opening, parsing, rendering, text
 extraction, and search use the library's `UsePdf`/`PdfSession` asynchronous API.

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-为 [HuxerUI](https://github.com/HuxerUI/HuxerUI) 提供基于 PDFium 的原生 PDF 扩展。
+为 [HuxerUI](https://github.com/HuxerUI/HuxerUI) 提供基于 PDFium 的 PDF 扩展。
 C++20，目标 `HuxerUI::PDF`，命名空间 `huxerui::pdf`。
 0.2 接口按 Scave 的 Camera/Media 会话与展示模式组织。
 
@@ -30,7 +30,7 @@ using namespace huxerui;
 [[huxerui::composable]]
 View Reader() {
   auto options = UseState(pdf::PdfOptions{});
-  auto session = pdf::UsePdf(pdf::PdfSource(File("/absolute/path/to/guide.pdf")), options.Get());
+  auto session = pdf::UsePdf(pdf::PdfSource(File("/absolute/path/to/guide.pdf")), options);
   const auto state = session.Snapshot();
   return pdf::PdfPage(session).With(Grow{});
 }
@@ -62,7 +62,7 @@ View Reader() {
 demo 即采用这种方式。`output.size` 是 PDF 点尺寸（1/72 英寸），不随显示缩放改变。
 
 同一调用位置的 `UsePdf` 重组会复用会话。句柄复制共享身份，但不能延长卸载后的活跃寿命。
-卸载会取消交付并阻止过期结果发布，已经执行的原生工作可能稍后才释放文档。
+卸载会取消交付并阻止过期结果发布，已经执行的工作可能稍后才释放文档。
 句柄只允许所属应用的 UI 线程访问；跨线程/应用误用抛出 `std::logic_error`。
 拥有者卸载后、应用仍存活时会话报告 Closed；应用关闭后其 SDK State 生命周期失效。
 
@@ -138,7 +138,7 @@ cmake --build build-demo --config Release --target example_pdf --parallel
 
 Windows 运行 `build-demo/Release/example_pdf.exe`。详见 [demo 说明](examples/preview/README.md)。
 独立文档构建使用 `-DHUXERUI_PDF_BUILD_VIEW=OFF`。CI 验证 Windows/Linux/macOS 文档层，以及
-Windows 原生会话与 demo；测试覆盖受控参数、来源重载、异步结果、线程误用、请求替换和卸载。
+Windows 会话与 demo；测试覆盖受控参数、来源重载、异步结果、线程误用、请求替换和卸载。
 
 默认下载固定 PDFium `chromium/8138` 非 V8 版本并校验 SHA-256。macOS SDK 要求 13 及以上。
 离线可设置 `HUXERUI_PDF_FETCH_PDFIUM=OFF` 和 `HUXERUI_PDF_PDFIUM_ROOT=/path/to/pdfium`。

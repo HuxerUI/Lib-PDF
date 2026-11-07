@@ -44,7 +44,7 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
 [[huxerui::composable]] View Workspace(State<bool> dark) {
   auto source = UseState(PdfSource(pdf_demo::raw::guide_pdf));
   auto options = UseState(PdfOptions{.page_width = 570});
-  auto session = UsePdf(source.Get(), options.Get());
+  auto session = UsePdf(source, options);
   const auto snapshot = session.Snapshot();
   auto name = UseState(std::string("HuxerUI PDF field guide.pdf"));
   auto query = UseState(TextEditingValue::FromText("PDF"));
@@ -58,7 +58,7 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
   const auto tasks = UseTaskScope();
   const auto picker = UseService<FilePicker>();
   const auto image = snapshot.output ? snapshot.output->image : ImageAsset{};
-  const auto requested_query = applied_query.Get();
+  const std::string requested_query = applied_query;
 
   Lifecycle([=] {
     TaskHandle request;
@@ -67,22 +67,22 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
     return [request] { request.Cancel(); };
   }, image, requested_query, snapshot.status);
 
-  const auto intent = options.Get();
+  const PdfOptions intent = options;
   const bool pending_display = snapshot.output && (snapshot.output->page != intent.page || snapshot.output->zoom != intent.zoom
       || snapshot.output->rotation != intent.rotation || snapshot.output->annotations != intent.annotations);
-  const bool busy = choosing.Get() || snapshot.status == PdfStatus::Loading || snapshot.status == PdfStatus::Rendering
+  const bool busy = choosing || snapshot.status == PdfStatus::Loading || snapshot.status == PdfStatus::Rendering
       || (snapshot.status == PdfStatus::Ready && pending_display);
   const bool ready = snapshot.status == PdfStatus::Ready && !busy;
   const bool needs_password = snapshot.error && snapshot.error->code == PdfErrorCode::Password;
   const auto& theme = UseTheme();
-  const auto search = [=] { if (ready) applied_query = query.Get().text; };
+  const auto search = [=] { if (ready) applied_query = query->text; };
 
   View page = snapshot.output ? PdfPage(session).With(Frame{.width = image.IntrinsicSize().width, .height = image.IntrinsicSize().height}) :
       Text(busy ? "Preparing your document..." : "Open a PDF to get started.").With(Padding(32.0F));
   View horizontal_page = ScrollView(std::move(page)).ScrollAxis(Axis::Horizontal).With(ScrollBar{});
   View details = Column{
     Text("DOCUMENT", TextRole::Label).With(Foreground(theme.colors.primary)),
-    Text(snapshot.metadata && !snapshot.metadata->title.empty() ? snapshot.metadata->title : name.Get(), TextRole::Title),
+    Text(snapshot.metadata && !snapshot.metadata->title.empty() ? snapshot.metadata->title : name, TextRole::Title),
     Text(snapshot.metadata && !snapshot.metadata->author.empty() ? "By " + snapshot.metadata->author : "Author not specified"),
     Text(snapshot.metadata ? std::to_string(snapshot.metadata->pages) + " pages" : "No document loaded"),
     Text(snapshot.output ? std::to_string(static_cast<int>(snapshot.output->size.width)) + " x " +
@@ -92,23 +92,23 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
     TextField(query).Label("Find text").Placeholder("Search this page")
         .OnChanged([query](const TextEditingValue& value) { query = value; }).OnSubmitted(search).With(Enabled{ready}),
     Button("Search").OnClick(search).With(Enabled{ready}),
-    Text(requested_query.empty() ? "Enter a query to find text." : std::to_string(matches.Get()) +
+    Text(requested_query.empty() ? "Enter a query to find text." : std::to_string(matches) +
         " matches for \"" + requested_query + "\" on this page."),
     Text("Use the page controls to continue your search on another page.", TextRole::Label),
   }.With(Spacing(14.0F), CrossAlign(CrossAxisAlignment::Stretch));
-  View inspector = show_text.Get() ?
-      SelectionArea(Text(page_text.Get().empty() ? "No extractable text on this page." : page_text.Get())).Key("page-text-preview") : details;
+  View inspector = show_text ?
+      SelectionArea(Text(page_text->empty() ? "No extractable text on this page." : page_text.Get())).Key("page-text-preview") : details;
 
   View unlock = needs_password ? Row{
     TextField(password).Label("Document password").Secure()
         .OnChanged([password](const TextEditingValue& value) { password = value; }).With(Grow{}, Enabled{!busy}),
     Button("Unlock").OnClick([=] {
-      options.Update([&](PdfOptions& next) { next.open.password = password.Get().text; ++next.reload; });
+      options.Update([&](PdfOptions& next) { next.open.password = password->text; ++next.reload; });
       password = TextEditingValue{};
     }).With(Enabled{!busy}),
   }.With(Spacing(12.0F)) : View{};
 
-  std::string status = snapshot.error ? snapshot.error->message : notice.Get();
+  std::string status = snapshot.error ? snapshot.error->message : notice;
   if (snapshot.status == PdfStatus::Loading) status = "Opening document...";
   if (snapshot.status == PdfStatus::Rendering || pending_display) status = "Preparing page...";
   return Column{
@@ -119,11 +119,11 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
           .With(Enabled{!busy && picker->CanOpenFiles()}),
       Button("Load sample").OnClick([=] {
         source = PdfSource(pdf_demo::raw::guide_pdf);
-        options = PdfOptions{.page_width = 570, .reload = options.Get().reload + 1};
+        options = PdfOptions{.page_width = 570, .reload = options->reload + 1};
         name = "HuxerUI PDF field guide.pdf";
         applied_query = std::string{};
       }).With(Enabled{!busy}),
-      Button(dark.Get() ? "Light theme" : "Dark theme").OnClick([dark] { dark = !dark.Get(); }),
+      Button(dark ? "Light theme" : "Dark theme").OnClick([dark] { dark = !dark; }),
     }.With(Spacing(12.0F), CrossAlign(CrossAxisAlignment::Center)),
     Flow{
       Button("Previous").OnClick([=] { options.Update([](PdfOptions& next) { --next.page; }); })
@@ -162,7 +162,7 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
 
 View App() {
   auto dark = UseState(false);
-  return MaterialTheme(dark.Get() ? MaterialDarkThemeSpec() : MaterialLightThemeSpec(), Scope([dark] { return Workspace(dark); }));
+  return MaterialTheme(dark ? MaterialDarkThemeSpec() : MaterialLightThemeSpec(), Scope([dark] { return Workspace(dark); }));
 }
 } // namespace
 

@@ -4,6 +4,7 @@
 #include <string>
 
 #define CHECK(...) do { if (!(__VA_ARGS__)) throw std::runtime_error(std::string(__FILE__) + ":" + std::to_string(__LINE__) + ": " #__VA_ARGS__); } while (false)
+#define PDF_TEST_DISCARD(...) static_cast<void>((__VA_ARGS__))
 template<class Exception, class Function> void Throws(Function&& function) {
   try { function(); } catch (const Exception&) { return; }
   throw std::runtime_error("Expected exception was not thrown");

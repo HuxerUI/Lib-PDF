@@ -29,7 +29,7 @@ jobs:
       - name: Independently decode rendered PNG
         run: python scripts/verify_png.py build/tests/rendered-page.png
 
-  native:
+  windows_ui:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

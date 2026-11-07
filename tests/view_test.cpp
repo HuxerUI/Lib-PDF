@@ -38,15 +38,15 @@ View Root() {
   auto mounted = UseState(true);
   auto tick = UseState(0);
   controls = Controls{source, options, mounted, tick, UseTaskScope()};
-  View child = mounted.Get() ? Scope([source, options]() -> View {
-    auto session = UsePdf(source.Get(), options.Get());
+  View child = mounted ? Scope([source, options]() -> View {
+    auto session = UsePdf(source, options);
     secondary = UsePdf(PdfSource(Fixture("sample.pdf")), {.page = 1, .page_width = 40, .render_scale = 1});
     active = session;
     const auto snapshot = session.Snapshot();
     const auto size = snapshot.output ? snapshot.output->image.IntrinsicSize() : Size{300, 400};
     return PdfPage(session).With(Frame{.width = size.width, .height = size.height});
   }) : View(Text("Unmounted"));
-  return Column{Text(std::to_string(tick.Get())), std::move(child)};
+  return Column{Text(std::to_string(tick)), std::move(child)};
 }
 
 void Wait(UiTest& ui, const std::function<bool()>& predicate) {
@@ -81,10 +81,10 @@ int main() { return Run([] {
   CHECK(PdfSource(File("a.pdf")) != PdfSource(File("b.pdf")));
   const auto asset = RawAsset::FromBytes({std::byte{'x'}});
   CHECK(PdfSource(asset) == PdfSource(asset));
-  Throws<std::invalid_argument>([] { (void)UsePdf({}, {.zoom = 0}); });
-  Throws<std::invalid_argument>([] { (void)UsePdf({}, {.page = -1}); });
-  Throws<std::invalid_argument>([] { (void)UsePdf({}, {.render_scale = std::numeric_limits<float>::infinity()}); });
-  Throws<std::logic_error>([] { (void)UsePdf(PdfSource(File("x.pdf"))); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(UsePdf({}, {.zoom = 0})); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(UsePdf({}, {.page = -1})); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(UsePdf({}, {.render_scale = std::numeric_limits<float>::infinity()})); });
+  Throws<std::logic_error>([] { PDF_TEST_DISCARD(UsePdf(PdfSource(File("x.pdf")))); });
 
 #ifdef PDF_HAS_UI_TESTING
   Application app(Root, {.window = {.initial_size = {900, 700}}, .show_debug_overlay = false});
@@ -124,12 +124,12 @@ int main() { return Run([] {
   CHECK(render_result->Succeeded() && render_result->Value().width == 40 && render_result->Value().height == 30);
   CHECK(active->Snapshot().output->page == 1 && active->Snapshot().output->zoom == 1.25F);
   CHECK(secondary->Snapshot().output->image == secondary_image);
-  Throws<std::invalid_argument>([] { (void)active->ReadTextAsync(-1); });
-  Throws<std::invalid_argument>([] { (void)active->SearchAsync(0, "\xC0\xAF"); });
-  Throws<std::invalid_argument>([] { (void)active->RenderAsync(0, {.width = 0}); });
-  Throws<std::invalid_argument>([] { (void)PdfPage(*active, {.horizontal_alignment = HorizontalAlignment::Stretch}); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(active->ReadTextAsync(-1)); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(active->SearchAsync(0, "\xC0\xAF")); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(active->RenderAsync(0, {.width = 0})); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(PdfPage(*active, {.horizontal_alignment = HorizontalAlignment::Stretch})); });
   std::atomic<bool> rejected{false};
-  std::thread other([&] { try { (void)identity.Snapshot(); } catch (const std::logic_error&) { rejected = true; } });
+  std::thread other([&] { try { PDF_TEST_DISCARD(identity.Snapshot()); } catch (const std::logic_error&) { rejected = true; } });
   other.join(); CHECK(rejected.load());
 
   const auto last_image = active->Snapshot().output->image;

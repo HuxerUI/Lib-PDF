@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Native PDF content for [HuxerUI](https://github.com/HuxerUI/HuxerUI), powered by
+PDF content for [HuxerUI](https://github.com/HuxerUI/HuxerUI), powered by
 [PDFium](https://pdfium.googlesource.com/pdfium/). C++20; target `HuxerUI::PDF`;
 namespace `huxerui::pdf`. The 0.2 API follows the session and presentation patterns
 used by Scave's Camera and Media libraries.
@@ -31,10 +31,10 @@ using namespace huxerui;
 [[huxerui::composable]]
 View Reader() {
   auto options = UseState(pdf::PdfOptions{});
-  auto session = pdf::UsePdf(pdf::PdfSource(File("/absolute/path/to/guide.pdf")), options.Get());
+  auto session = pdf::UsePdf(pdf::PdfSource(File("/absolute/path/to/guide.pdf")), options);
   const auto state = session.Snapshot();
   const bool next = state.status == pdf::PdfStatus::Ready && state.metadata
-      && options.Get().page + 1 < state.metadata->pages;
+      && options->page + 1 < state.metadata->pages;
   return Column{
     Button("Next").OnClick([options] {
       options.Update([](pdf::PdfOptions& value) { ++value.page; });
@@ -44,7 +44,7 @@ View Reader() {
 }
 ```
 
-Use an accessible native File path or a file-picker-provided FileReference.
+Use an accessible File path or a file-picker-provided FileReference.
 No `Install` hook is needed: immutable document handles own the shared PDFium
 runtime, and HuxerUI's TaskScope owns the session's asynchronous work.
 
@@ -95,7 +95,7 @@ reconstructing a FileReference source every composition.
 `UsePdf` owns the active session lifetime. Copies of PdfSession share identity
 and state; they do not keep it active after its owner unmounts. Removing only a
 PdfPage does not close the session. Replaced/unmounted requests are canceled and
-obsolete results cannot publish; native work already running may finish before
+obsolete results cannot publish; work already running may finish before
 releasing its document. All handle access belongs to the owning UI thread and
 application. Reads/commands throw `std::logic_error` on misuse. After owner unmount,
 the live application's retained handle reports Closed; after application shutdown,
@@ -147,7 +147,7 @@ auto png = pixels.ToPng();
 ```
 
 These explicitly synchronous methods may run on workers. Input memory is copied,
-document handles share ownership, and native Unicode paths are supported. Backend
+document handles share ownership, and Unicode filesystem paths are supported. Backend
 failures throw `PdfException`, invalid options `std::invalid_argument`, and bad
 page indices `std::out_of_range`. All library PDFium calls, including destruction,
 share a mutex. Do not initialize/destroy or concurrently call PDFium independently.
@@ -159,7 +159,7 @@ with the input limit applied before accepting excess bytes.
 
 ## Build, demo, and tests
 
-Requires CMake 3.20+, C++20, and HuxerUI for native components. Verified SDK revision:
+Requires CMake 3.20+, C++20, and HuxerUI for UI components. Verified SDK revision:
 `cadb1696cfa7b87d9d2d316b3ecba07b85a46962`.
 
 ```sh
@@ -188,7 +188,7 @@ cmake --build build-core --config Release --parallel
 ctest --test-dir build-core -C Release --output-on-failure
 ```
 
-CI checks the document backend on Windows/Linux/macOS and the native session/demo
+CI checks the document backend on Windows/Linux/macOS and the session/demo
 on Windows. Headless tests cover controlled updates, source reloads, typed async
 results, wrong-thread access, request replacement and unmount behavior, plus the
 demo's real packaged resources. Compiler-free project-plan/library-graph discovery

@@ -74,31 +74,31 @@ int main() { return Run([] {
   fs::remove(unicode_path);
   CHECK(unicode_doc.PageCount() == 2 && !unicode_doc.Text(0).empty());
 
-  try { (void)PdfDocument::Open(fixtures / "encrypted.pdf"); CHECK(false); }
+  try { PDF_TEST_DISCARD(PdfDocument::Open(fixtures / "encrypted.pdf")); CHECK(false); }
   catch (const PdfException& error) { CHECK(error.Code() == PdfErrorCode::Password); }
-  try { (void)PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "wrong"}); CHECK(false); }
+  try { PDF_TEST_DISCARD(PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "wrong"})); CHECK(false); }
   catch (const PdfException& error) { CHECK(error.Code() == PdfErrorCode::Password); }
   CHECK(PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "huxerui"}).Text(0) == doc.Text(0));
   CHECK(PdfDocument::Open(fixtures / "encrypted.pdf", {.password = "owner"}).PageCount() == 2);
-  Throws<PdfException>([&] { (void)PdfDocument::Open(fixtures / "missing.pdf"); });
-  Throws<PdfException>([] { (void)PdfDocument::FromBytes({}); });
-  Throws<PdfException>([] { const std::byte bad[]{std::byte{'x'}}; (void)PdfDocument::FromBytes(bad); });
-  Throws<std::invalid_argument>([&] { (void)PdfDocument::Open(fixtures / "sample.pdf", {.max_bytes = 1}); });
-  Throws<std::invalid_argument>([&] { (void)PdfDocument::Open(fixtures / "sample.pdf", {.password = std::string("a\0b", 3)}); });
-  Throws<std::out_of_range>([&] { (void)doc.Size(-1); });
-  Throws<std::out_of_range>([&] { (void)doc.Render(2); });
-  Throws<std::out_of_range>([&] { (void)doc.Text(2); });
-  Throws<std::out_of_range>([&] { (void)doc.Search(2, "hello"); });
-  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.width = 0}); });
-  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.width = std::numeric_limits<int>::max()}); });
-  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.rotation = static_cast<PageRotation>(9)}); });
-  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.background_rgb = 0xFFFFFFFF}); });
-  Throws<std::invalid_argument>([&] { (void)doc.Render(0, {.max_pixels = 10}); });
-  Throws<std::invalid_argument>([&] { (void)doc.Metadata(std::string("a\0b", 3)); });
-  Throws<std::invalid_argument>([&] { (void)doc.Search(0, "\xC0\xAF"); });
-  Throws<std::invalid_argument>([&] { (void)doc.Search(0, "\xED\xA0\x80"); });
-  Throws<std::invalid_argument>([&] { (void)doc.Search(0, std::string("a\0b", 3)); });
-  Throws<std::invalid_argument>([] { (void)PdfBitmap{}.ToPng(); });
+  Throws<PdfException>([&] { PDF_TEST_DISCARD(PdfDocument::Open(fixtures / "missing.pdf")); });
+  Throws<PdfException>([] { PDF_TEST_DISCARD(PdfDocument::FromBytes({})); });
+  Throws<PdfException>([] { const std::byte bad[]{std::byte{'x'}}; PDF_TEST_DISCARD(PdfDocument::FromBytes(bad)); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(PdfDocument::Open(fixtures / "sample.pdf", {.max_bytes = 1})); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(PdfDocument::Open(fixtures / "sample.pdf", {.password = std::string("a\0b", 3)})); });
+  Throws<std::out_of_range>([&] { PDF_TEST_DISCARD(doc.Size(-1)); });
+  Throws<std::out_of_range>([&] { PDF_TEST_DISCARD(doc.Render(2)); });
+  Throws<std::out_of_range>([&] { PDF_TEST_DISCARD(doc.Text(2)); });
+  Throws<std::out_of_range>([&] { PDF_TEST_DISCARD(doc.Search(2, "hello")); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Render(0, {.width = 0})); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Render(0, {.width = std::numeric_limits<int>::max()})); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Render(0, {.rotation = static_cast<PageRotation>(9)})); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Render(0, {.background_rgb = 0xFFFFFFFF})); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Render(0, {.max_pixels = 10})); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Metadata(std::string("a\0b", 3))); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Search(0, "\xC0\xAF")); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Search(0, "\xED\xA0\x80")); });
+  Throws<std::invalid_argument>([&] { PDF_TEST_DISCARD(doc.Search(0, std::string("a\0b", 3))); });
+  Throws<std::invalid_argument>([] { PDF_TEST_DISCARD(PdfBitmap{}.ToPng()); });
   const auto wide = huxerui::pdf::detail::ToUtf16("中文😀");
   CHECK(huxerui::pdf::detail::FromUtf16(wide.data(), wide.size() - 1) == "中文😀");
 

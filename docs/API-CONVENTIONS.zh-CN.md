@@ -61,11 +61,11 @@ HuxerUI 布局。不要仅为了外形统一而把所有接口改成同一种类
 ## 4. 库承担耗时工作的调度
 
 Lottie 的加载和渲染进入后端队列；SQLite 对外提供异步操作并按连接串行执行。
-Camera 的拍照返回 `Task<CameraResult<ImageAsset>>`，Media 的原生准备也异步完成。
+Camera 的拍照返回 `Task<CameraResult<ImageAsset>>`，Media 的媒体准备也异步完成。
 
 应用通过 `UseTaskScope()` 管理任务，在所属 UI 序列接收结果。控件正常组合不应要求调用者
 每次手动创建线程或同步解析大型文件。取消、替换 source、卸载时要抑制过期结果和回调；
-“取消交付”与“立即中断原生操作”不是同一承诺。
+“取消交付”与“立即中断已开始的操作”不是同一承诺。
 
 显式的底层同步 API 可以保留，但应与默认 UI 接入路径分开，并标清阻塞和线程要求。
 
@@ -97,7 +97,7 @@ Lottie 的失败事件还明确区分加载失败清空画面与渲染失败保�
 - source 的相等性、重组是否重新读取、同一路径文件改变后如何重载都要有约定。
 - 使用 `ImageAsset`、`Bytes`、`ImageFit`、`Size`、`StringVariant` 等已有 SDK 类型，
   不为同一概念再造一组不兼容的 UI 类型。
-- 通用布局通过 `.With(Frame{...})` 等 SDK 修饰符提供。配置或原生分辨率不应暗中替代布局。
+- 通用布局通过 `.With(Frame{...})` 等 SDK 修饰符提供。配置或源分辨率不应暗中替代布局。
 - 核心 Camera/Media 展示组件不附带拍照/播放工具栏、权限弹窗或固定错误文案。
   完整交互工作区由示例应用组合。Charts 的可配置标题/图例说明这一点不是“组件不能有任何装饰”。
 
@@ -125,7 +125,7 @@ Lottie 的失败事件还明确区分加载失败清空画面与渲染失败保�
 | 库内负责耗时工作 | 会话自动异步加载/渲染；独立操作为 `ReadTextAsync`、`SearchAsync`、`RenderAsync` |
 | 类型化失败 | `PdfResult<T>` 复用 SDK Result，`PdfError` 提供 code/stage/message；标量误用同步抛出异常 |
 | 过期请求不能覆盖当前来源 | 来源与渲染请求分代，替换/取消/卸载抑制旧发布；独立操作可返回 Superseded |
-| 无需形式化地增加 Install | PDFium 由不可变文档持有，不注册原生平台模块，因而不增加空 Install |
+| 无需形式化地增加 Install | PDFium 由不可变文档持有，不注册平台模块，因而不增加空 Install |
 | 避免 SDK 命名冲突 | 旋转类型使用 `PageRotation` |
 | 独立底层保留明确用途 | `PdfDocument` 是同步、可跨工作线程共享的文档句柄，后端异常为 `PdfException` |
 

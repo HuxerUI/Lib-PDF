@@ -94,7 +94,7 @@ struct PdfSnapshot {
 };
 
 /// Shared UI-thread handle owned by one UsePdf composition. Copies do not extend its active lifetime.
-/// Unmounting closes the session and suppresses pending publications; in-flight native work may finish.
+/// Unmounting closes the session and suppresses pending publications; work already running may finish.
 /// No Install hook is needed: PDFium is owned by the underlying immutable document handles.
 class PdfSession final {
 public:
@@ -109,10 +109,10 @@ public:
   /// reload before completion yields Superseded; changing the displayed page does not invalidate these requests.
   /// Task cancellation suppresses delivery. These operations do not overwrite the session's displayed page/error.
   /// Invalid scalar options/query encoding throw synchronously; document-dependent bounds yield Page failures.
-  [[nodiscard]] Task<PdfResult<std::string>> ReadTextAsync(int page) const;
-  [[nodiscard]] Task<PdfResult<std::vector<SearchMatch>>> SearchAsync(
+  Task<PdfResult<std::string>> ReadTextAsync(int page) const;
+  Task<PdfResult<std::vector<SearchMatch>>> SearchAsync(
       int page, std::string query, SearchOptions options = {}) const;
-  [[nodiscard]] Task<PdfResult<PdfBitmap>> RenderAsync(int page, RenderOptions options = {}) const;
+  Task<PdfResult<PdfBitmap>> RenderAsync(int page, RenderOptions options = {}) const;
 private:
   explicit PdfSession(std::shared_ptr<detail::PdfSessionData> data) : data_(std::move(data)) {}
   std::shared_ptr<detail::PdfSessionData> data_;

@@ -80,7 +80,7 @@ struct SearchMatch {
 /// Do not call PDFium directly concurrently or initialize/destroy it independently.
 class PdfDocument final {
 public:
-  /// Reads a native filesystem path, including Unicode paths on Windows.
+  /// Reads a filesystem path, including Unicode paths on Windows.
   [[nodiscard]] static PdfDocument Open(const std::filesystem::path& path, OpenOptions options = {});
   /// Copies input before opening. The input span need not outlive this call.
   [[nodiscard]] static PdfDocument FromBytes(std::span<const std::byte> bytes, OpenOptions options = {});

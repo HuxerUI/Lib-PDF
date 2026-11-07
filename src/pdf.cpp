@@ -7,6 +7,8 @@
 #include <thread>
 #include "unicode.h"
 
+#define PDF_DISCARD(...) static_cast<void>((__VA_ARGS__))
+
 namespace huxerui::pdf {
 namespace detail {
 struct PdfAccess {
@@ -139,7 +141,7 @@ struct PdfSessionData : std::enable_shared_from_this<PdfSessionData> {
 
   void Check() const {
     if (std::this_thread::get_id() != owner) throw std::logic_error("PDF session belongs to another UI thread");
-    (void)snapshot.Get(); // Also validates application lifetime/ownership.
+    PDF_DISCARD(snapshot.Get()); // Also validates application lifetime/ownership.
   }
 
   void Close() {
@@ -255,7 +257,7 @@ template<class Function> auto Operate(std::shared_ptr<detail::PdfSessionData> da
 } // namespace
 
 bool PdfSession::IsConnected() const { Check(data_); return data_->connected; }
-PdfSnapshot PdfSession::Snapshot() const { Check(data_); return data_->snapshot.Get(); }
+PdfSnapshot PdfSession::Snapshot() const { Check(data_); return data_->snapshot; }
 
 Task<PdfResult<std::string>> PdfSession::ReadTextAsync(int page) const {
   Check(data_);
@@ -267,7 +269,7 @@ Task<PdfResult<std::vector<SearchMatch>>> PdfSession::SearchAsync(int page, std:
   Check(data_);
   if (page < 0 || query.size() > 1024U * 1024U || options.max_results > 1000000)
     throw std::invalid_argument("Invalid PDF search request");
-  (void)detail::ToUtf16(query);
+  PDF_DISCARD(detail::ToUtf16(query));
   return Operate(data_, PdfErrorStage::Search, [page, query = std::move(query), options](const PdfDocument& doc) {
     return doc.Search(page, query, options);
   });
@@ -282,7 +284,7 @@ Task<PdfResult<PdfBitmap>> PdfSession::RenderAsync(int page, RenderOptions optio
 PdfSession UsePdf(PdfSource source, PdfOptions options, const std::source_location& location) {
   Validate(options);
   auto tasks = UseTaskScope();
-  auto data = UseState(std::make_shared<detail::PdfSessionData>(tasks), location).Get();
+  std::shared_ptr<detail::PdfSessionData> data = UseState(std::make_shared<detail::PdfSessionData>(tasks), location);
   std::optional<PdfError> resolution_error;
   if (const auto* resource = std::get_if<RawResource>(&detail::PdfAccess::Input(source))) {
     try { source = PdfSource(UseRawResource(*resource)); }
@@ -315,3 +317,5 @@ View PdfPage(PdfSession session, PdfPageProperties properties) {
   });
 }
 } // namespace huxerui::pdf
+
+#undef PDF_DISCARD
