@@ -212,18 +212,11 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           sudo xcodebuild -license accept
           sudo xcodebuild -runFirstLaunch
-      - name: Build HuxerUI CLI
-        run: |
-          cmake -S .cache/HuxerUI/tools/huxerui_cli -B build-huxerui-cli -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-huxerui-cli --parallel 2
-      - name: Build and package the Simulator app
+      - name: Build the Simulator app
         timeout-minutes: 30
         env:
-          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/pdf-preview-ci.xcconfig
-        run: |
-          arch=$(uname -m)
-          printf '%s\n' 'CODE_SIGNING_ALLOWED = NO' 'CODE_SIGNING_REQUIRED = NO' "ARCHS = $arch" 'ONLY_ACTIVE_ARCH = YES' 'PDF_PREVIEW_MOBILE_SMOKE = ON' > "$XCODE_XCCONFIG_FILE"
-          ./build-huxerui-cli/huxerui package ios --profile release --source .cache/HuxerUI
+          HUXERUI_HOME: ${{ github.workspace }}/.cache/HuxerUI
+        run: bash .github/scripts/build-ios-preview.sh
       - name: Verify and archive the Simulator app
         shell: bash
         run: |
