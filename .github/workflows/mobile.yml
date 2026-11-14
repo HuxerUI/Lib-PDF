@@ -93,6 +93,6 @@ jobs:
         run: cmake --build build-ios --target pdf_document_tests --parallel 2
       - name: Run document tests
         env:
-          TEST_BINARY: build-ios/tests/pdf_document_tests
+          TEST_BINARY: build-ios/tests/pdf_document_tests.app/pdf_document_tests
           PDFIUM_DYLIB: build-ios/pdfium-runtime/libpdfium.dylib
         run: bash .github/scripts/run-ios-tests.sh

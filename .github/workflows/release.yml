@@ -50,7 +50,10 @@ jobs:
           path: .cache/HuxerUI
       - name: Select Xcode 26.2
         if: runner.os == 'macOS'
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+          sudo xcodebuild -license accept
+          sudo xcodebuild -runFirstLaunch
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -205,12 +208,16 @@ jobs:
           ref: ${{ env.HUXERUI_REVISION }}
           path: .cache/HuxerUI
       - name: Select Xcode 26.2
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+          sudo xcodebuild -license accept
+          sudo xcodebuild -runFirstLaunch
       - name: Build HuxerUI CLI
         run: |
           cmake -S .cache/HuxerUI/tools/huxerui_cli -B build-huxerui-cli -DCMAKE_BUILD_TYPE=Release
           cmake --build build-huxerui-cli --parallel 2
       - name: Build and package the Simulator app
+        timeout-minutes: 30
         env:
           XCODE_XCCONFIG_FILE: ${{ runner.temp }}/pdf-preview-ci.xcconfig
         run: |
