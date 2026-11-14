@@ -1,0 +1,279 @@
+name: Multi-Platform Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version for the tag (for example 0.1.0)
+        required: true
+        default: "0.1.0"
+      create_release:
+        description: Create or update a GitHub release and attach the built artifacts
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  HUXERUI_REVISION: cadb1696cfa7b87d9d2d316b3ecba07b85a46962
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            archive: pdf-preview-windows-x64.zip
+          - name: linux-x64
+            os: ubuntu-latest
+            archive: pdf-preview-linux-x64.tar.gz
+          - name: macos-arm64
+            os: macos-15
+            archive: pdf-preview-macos-arm64.zip
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out verified HuxerUI revision
+        uses: actions/checkout@v4
+        with:
+          repository: HuxerUI/HuxerUI
+          ref: ${{ env.HUXERUI_REVISION }}
+          path: .cache/HuxerUI
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config \
+            libgtk-4-dev libepoxy-dev libsoup-3.0-dev libpango1.0-dev libfontconfig1-dev libglib2.0-dev
+      - name: Configure preview
+        run: cmake -S examples/preview -B build-release -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DCMAKE_BUILD_TYPE=Release
+      - name: Build preview
+        run: cmake --build build-release --config Release --target example_pdf --parallel 2
+      - name: Package Windows preview
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "release/pdf-preview-windows-x64"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "build-release/Release/example_pdf.exe" $stage
+          Copy-Item "build-release/Release/pdfium.dll" $stage
+          Copy-Item "build-release/Release/example_pdf.resources" $stage -Recurse
+          Copy-Item "LICENSE" $stage
+          Copy-Item "third_party/pdfium" $stage -Recurse
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $crt = Get-ChildItem (Join-Path $vs "VC/Redist/MSVC") -Recurse -Filter "msvcp140.dll" |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $crt) { throw "MSVC x64 redistributable DLLs were not found" }
+          Copy-Item (Join-Path $crt.DirectoryName "*.dll") $stage
+          Compress-Archive -Path "$stage/*" -DestinationPath "pdf-preview-windows-x64.zip" -Force
+      - name: Package Linux preview
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="release/pdf-preview-linux-x64"
+          mkdir -p "$stage"
+          cp build-release/example_pdf "$stage/"
+          cp -r build-release/example_pdf.resources "$stage/"
+          pdfium=$(find build-release/_deps -path '*/lib/libpdfium.so' -print -quit)
+          test -n "$pdfium"
+          cp "$pdfium" "$stage/libpdfium.so"
+          cp LICENSE "$stage/"
+          cp -r third_party/pdfium "$stage/"
+          printf '%s\n' '#!/bin/sh' 'here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)' \
+            'LD_LIBRARY_PATH="$here${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$here/example_pdf" "$@"' > "$stage/pdf-preview"
+          chmod +x "$stage/pdf-preview"
+          tar -C release -czf pdf-preview-linux-x64.tar.gz pdf-preview-linux-x64
+      - name: Package macOS preview
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="build-release/example_pdf.app"
+          test -d "$app"
+          mkdir -p "$app/Contents/Frameworks"
+          cp build-release/pdfium-runtime/libpdfium.dylib "$app/Contents/Frameworks/libpdfium.dylib"
+          install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/example_pdf" 2>/dev/null || true
+          codesign --force --deep --sign - "$app"
+          stage="release/pdf-preview-macos-arm64"
+          mkdir -p "$stage"
+          cp -R "$app" "$stage/"
+          cp LICENSE "$stage/"
+          cp -r third_party/pdfium "$stage/"
+          ditto -c -k --sequesterRsrc --keepParent "$stage" pdf-preview-macos-arm64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-preview-${{ matrix.name }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out verified HuxerUI revision
+        uses: actions/checkout@v4
+        with:
+          repository: HuxerUI/HuxerUI
+          ref: ${{ env.HUXERUI_REVISION }}
+          path: .cache/HuxerUI
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK components
+        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;29.0.14206865' 'cmake;3.22.1'
+      - name: Build HuxerUI CLI
+        run: |
+          cmake -S .cache/HuxerUI/tools/huxerui_cli -B build-huxerui-cli -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-huxerui-cli --parallel 2
+      - name: Make the Gradle wrapper executable
+        run: chmod +x examples/preview/platform/android/gradlew
+      - name: Package installable Android preview
+        env:
+          ORG_GRADLE_PROJECT_huxeruiAbis: arm64-v8a,x86_64
+        run: ./build-huxerui-cli/huxerui package android --profile release --source .cache/HuxerUI
+      - name: Verify the APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=$(find examples/preview/dist/android -maxdepth 1 -name '*.apk' -print -quit)
+          test -n "$apk"
+          entries="$RUNNER_TEMP/pdf-preview-apk-entries"
+          unzip -Z1 "$apk" > "$entries"
+          grep -Fx 'lib/arm64-v8a/libexample_pdf.so' "$entries"
+          grep -Fx 'lib/arm64-v8a/libhuxerui.so' "$entries"
+          grep -Fx 'lib/arm64-v8a/libpdfium.so' "$entries"
+          grep -Fx 'lib/x86_64/libexample_pdf.so' "$entries"
+          grep -Fx 'lib/x86_64/libhuxerui.so' "$entries"
+          grep -Fx 'lib/x86_64/libpdfium.so' "$entries"
+          grep -Fx 'assets/huxerui/resources.bin' "$entries"
+          grep -Fx 'assets/huxerui/pdf_demo/raw/guide.pdf' "$entries"
+          cp "$apk" pdf-preview-android.apk
+      - name: Enable Android emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch the packaged preview
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          APK: pdf-preview-android.apk
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash .github/scripts/check-android-preview-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-preview-android
+          path: pdf-preview-android.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out verified HuxerUI revision
+        uses: actions/checkout@v4
+        with:
+          repository: HuxerUI/HuxerUI
+          ref: ${{ env.HUXERUI_REVISION }}
+          path: .cache/HuxerUI
+      - name: Build HuxerUI CLI
+        run: |
+          cmake -S .cache/HuxerUI/tools/huxerui_cli -B build-huxerui-cli -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-huxerui-cli --parallel 2
+      - name: Build and package the Simulator app
+        env:
+          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/pdf-preview-ci.xcconfig
+        run: |
+          arch=$(uname -m)
+          printf '%s\n' 'CODE_SIGNING_ALLOWED = NO' 'CODE_SIGNING_REQUIRED = NO' "ARCHS = $arch" 'ONLY_ACTIVE_ARCH = YES' 'PDF_PREVIEW_MOBILE_SMOKE = ON' > "$XCODE_XCCONFIG_FILE"
+          ./build-huxerui-cli/huxerui package ios --profile release --source .cache/HuxerUI
+      - name: Verify and archive the Simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=$(find examples/preview/dist/ios -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$app"
+          test -f "$app/Frameworks/libpdfium.dylib"
+          test -f "$app/HuxerUI/huxerui/resources.bin"
+          test -f "$app/HuxerUI/pdf_demo/raw/guide.pdf"
+          codesign --force --deep --sign - "$app"
+          APP="$app" bash .github/scripts/check-ios-preview-app.sh
+          ditto -c -k --sequesterRsrc --keepParent "$app" pdf-preview-ios-simulator-$(uname -m).zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-preview-ios-simulator
+          path: pdf-preview-ios-simulator-*.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: |
+      always() &&
+      needs.desktop.result == 'success' &&
+      needs.android.result == 'success' &&
+      needs.ios.result == 'success' &&
+      (github.event_name != 'workflow_dispatch' || inputs.create_release)
+    needs: [desktop, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine release tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-preview-*
+          merge-multiple: true
+          path: dist
+      - name: List release assets
+        shell: bash
+        run: find dist -maxdepth 2 -type f | sort
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: PDF Preview ${{ steps.release_tag.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            Multi-platform build of the Lib-PDF preview application.
+
+            Artifacts:
+            - Windows x64: `pdf-preview-windows-x64.zip` (exe, resources, PDFium DLL, licenses)
+            - Linux x64: `pdf-preview-linux-x64.tar.gz` (launcher, resources, PDFium, licenses)
+            - macOS arm64: `pdf-preview-macos-arm64.zip` (.app bundle, PDFium embedded)
+            - Android: `pdf-preview-android.apk` (debug-signed, arm64-v8a + x86_64)
+            - iOS Simulator: `pdf-preview-ios-simulator-*.zip` (.app bundle for the Simulator)
+
+            Linux runs require the GTK4 and related system libraries used by HuxerUI.
+            The macOS app is ad-hoc signed and not notarized.
+          files: |
+            dist/**/*.zip
+            dist/**/*.tar.gz
+            dist/**/*.apk

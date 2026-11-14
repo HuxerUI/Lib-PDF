@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure standalone document library
-        run: cmake -S . -B build -DHUXERUI_PDF_BUILD_VIEW=OFF -DHUXERUI_PDF_BUILD_TESTS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHUXERUI_PDF_BUILD_VIEW=OFF -DHUXERUI_PDF_BUILD_TESTS=ON
       - name: Build
         run: cmake --build build --config Release --parallel 2
       - name: Test
@@ -40,7 +40,7 @@ jobs:
           ref: cadb1696cfa7b87d9d2d316b3ecba07b85a46962
           path: .cache/HuxerUI
       - name: Configure component and preview
-        run: cmake -S . -B build -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DHUXERUI_PDF_BUILD_TESTS=ON -DHUXERUI_BUILD_TESTING_LIBRARY=ON -DHUXERUI_PDF_BUILD_EXAMPLES=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DHUXERUI_PDF_BUILD_TESTS=ON -DHUXERUI_BUILD_TESTING_LIBRARY=ON -DHUXERUI_PDF_BUILD_EXAMPLES=ON
       - name: Build
         run: cmake --build build --config Release --parallel 2
       - name: Test
@@ -48,6 +48,6 @@ jobs:
       - name: Check project plan without compiler discovery
         run: cmake -S . -B build-plan -DHUXERUI_PROJECT_PLAN_ONLY=ON -DHUXERUI_PROJECT_PLAN_OUTPUT="${{ github.workspace }}/build-plan/project.json"
       - name: Configure standalone demo
-        run: cmake -S examples/preview -B build-demo -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DHUXERUI_PDF_PDFIUM_ROOT="${{ github.workspace }}/build/_deps/huxerui_pdfium-src"
+        run: cmake -S examples/preview -B build-demo -DCMAKE_BUILD_TYPE=Release -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI"
       - name: Check standalone demo project plan
         run: cmake -S examples/preview -B build-demo-plan -DHUXERUI_PROJECT_PLAN_ONLY=ON -DHUXERUI_PROJECT_PLAN_OUTPUT="${{ github.workspace }}/build-demo-plan/project.json"

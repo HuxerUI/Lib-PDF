@@ -1,0 +1,98 @@
+name: Mobile
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: x86_64
+            run_tests: true
+          - abi: arm64-v8a
+            run_tests: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK components
+        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;29.0.14206865' 'cmake;3.22.1'
+      - name: Configure document tests
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/ndk/29.0.14206865"
+          cmake -S . -B build-android -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-23 \
+            -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHUXERUI_PDF_BUILD_VIEW=OFF \
+            -DHUXERUI_PDF_BUILD_TESTS=ON \
+            -DPDF_FIXTURE_DIR=/data/local/tmp/libpdf-tests/fixtures
+      - name: Build
+        run: cmake --build build-android --target pdf_document_tests --parallel 2
+      - name: Locate PDFium runtime
+        run: |
+          pdfium=$(find build-android/_deps -path '*/lib/libpdfium.so' -print -quit)
+          test -n "$pdfium"
+          echo "PDFIUM_LIBRARY=$pdfium" >> "$GITHUB_ENV"
+      - name: Enable Android emulator acceleration
+        if: matrix.run_tests
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run document tests
+        if: matrix.run_tests
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          TEST_BINARY: build-android/tests/pdf_document_tests
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash .github/scripts/run-android-tests.sh
+
+  ios:
+    name: iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure document tests
+        run: |
+          host_arch=$(uname -m)
+          if [[ "$host_arch" == "arm64" ]]; then simulator_arch=arm64; else simulator_arch=x86_64; fi
+          cmake -S . -B build-ios -G Ninja \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphonesimulator \
+            -DCMAKE_OSX_ARCHITECTURES="$simulator_arch" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHUXERUI_PDF_BUILD_VIEW=OFF \
+            -DHUXERUI_PDF_BUILD_TESTS=ON \
+            -DPDF_FIXTURE_DIR="$PWD/tests/fixtures"
+      - name: Build
+        run: cmake --build build-ios --target pdf_document_tests --parallel 2
+      - name: Run document tests
+        env:
+          TEST_BINARY: build-ios/tests/pdf_document_tests
+          PDFIUM_DYLIB: build-ios/pdfium-runtime/libpdfium.dylib
+        run: bash .github/scripts/run-ios-tests.sh

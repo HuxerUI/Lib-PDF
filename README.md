@@ -170,7 +170,7 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The desktop [demo](examples/preview/README.md) provides file/password opening,
+The [demo](examples/preview/README.md) provides file/password opening,
 paging, zoom, rotation, annotations, search, text inspection and theme switching.
 It uses only the session API for PDF work, with no caller-side RunWorker pipeline.
 It follows `examples/preview/{src,resources,platform}` and builds independently:
@@ -188,8 +188,8 @@ cmake --build build-core --config Release --parallel
 ctest --test-dir build-core -C Release --output-on-failure
 ```
 
-CI checks the document backend on Windows/Linux/macOS and the session/demo
-on Windows. Headless tests cover controlled updates, source reloads, typed async
+CI checks the document backend on Windows/Linux/macOS and Android/iOS Simulator,
+and the session/demo on Windows. Headless tests cover controlled updates, source reloads, typed async
 results, wrong-thread access, request replacement and unmount behavior, plus the
 demo's real packaged resources. Compiler-free project-plan/library-graph discovery
 does not download PDFium. Design references are recorded in
@@ -200,14 +200,21 @@ does not download PDFium. Design references are recorded in
 Default builds fetch non-V8 PDFium `chromium/8138` from
 [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries), with per-archive
 SHA-256 verification. Automatic downloads cover Windows x64/ARM64, Linux glibc
-x64/ARM64, and macOS x64/ARM64/universal. Other architectures, musl, Android, iOS,
-and Web require a matching, independently built SDK or an existing
-`PDFium::PDFium` CMake target. Those cross-platform configurations have not been
-validated by this project.
+x64/ARM64, macOS x64/ARM64/universal, Android arm64-v8a/x86_64, and iOS
+arm64 device plus arm64/x86_64 Simulator. Other architectures, musl, Android
+32-bit ABIs, and Web require a matching, independently built SDK or an existing
+`PDFium::PDFium` CMake target.
 
-The pinned macOS SDK requires macOS 13 or later. CMake normalizes and ad-hoc signs
-a build-local copy of its dylib for `@rpath` loading, leaving supplied SDK files
-untouched. Apply your application's distribution signing during packaging.
+The mobile workflow builds the document backend for Android arm64-v8a/x86_64 and
+the iOS Simulator, then runs the document tests on an Android x86_64 emulator and
+an iOS Simulator. The release workflow packages the preview for Windows, Linux,
+macOS, Android, and the iOS Simulator with the matching PDFium runtime. Physical
+devices and other Android ABIs are not covered.
+
+The pinned macOS and iOS SDKs require macOS 13 and iOS 17 respectively. CMake
+normalizes and ad-hoc signs a build-local copy of the dylib for `@rpath` loading,
+leaving supplied SDK files untouched. Apply your application's distribution
+signing during packaging.
 
 To build offline:
 

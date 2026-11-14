@@ -3,22 +3,31 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_SYSTEM_NAME AND NOT CMAKE_TOOLCHAIN_FILE
         AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET AND "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS deployment target")
 endif()
-project(example_pdf VERSION 0.2.0 LANGUAGES NONE)
+project(example_pdf VERSION 0.1.0 LANGUAGES NONE)
 include("${CMAKE_CURRENT_SOURCE_DIR}/HuxerUIProject.cmake")
 if(HUXERUI_PROJECT_PLAN_ONLY)
     return()
 endif()
 
 set(_pdf_demo_sources src/app.cpp)
+set(_pdf_demo_resource_args)
 if(NOT HUXERUI_LIBRARY_GRAPH_ONLY)
+    if(ANDROID AND HUXERUI_ANDROID_RESOURCE_OUTPUT_ROOT)
+        list(APPEND _pdf_demo_resource_args RESOURCE_OUTPUT_DIRECTORY
+            "${HUXERUI_ANDROID_RESOURCE_OUTPUT_ROOT}/${ANDROID_ABI}")
+    endif()
     if(WIN32)
         list(APPEND _pdf_demo_sources platform/windows/main.cpp)
     elseif(APPLE AND NOT IOS)
         list(APPEND _pdf_demo_sources platform/macos/main.cpp)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         list(APPEND _pdf_demo_sources platform/linux/main.cpp)
+    elseif(ANDROID)
+        # MainActivity loads the application shared library declared by app.cpp.
+    elseif(IOS)
+        # The Xcode shell links the static application core declared by app.cpp.
     else()
-        message(FATAL_ERROR "The PDF preview currently provides desktop platform entry points")
+        message(FATAL_ERROR "The PDF preview provides Windows, macOS, Linux, Android, and iOS entry points")
     endif()
 endif()
 
@@ -26,6 +35,7 @@ huxerui_add_app(example_pdf
     SOURCES ${_pdf_demo_sources}
     RESOURCES resources
     RESOURCE_NAMESPACE pdf_demo
+    ${_pdf_demo_resource_args}
     BUNDLE_NAME "PDF Preview"
     BUNDLE_IDENTIFIER "org.huxerui.lib.pdf.preview")
 if(TARGET HuxerUI::PDF)
@@ -35,6 +45,10 @@ else()
 endif()
 if(HUXERUI_LIBRARY_GRAPH_ONLY)
     return()
+endif()
+option(PDF_PREVIEW_MOBILE_SMOKE "Write the first rendered sample page result for mobile CI" OFF)
+if(PDF_PREVIEW_MOBILE_SMOKE)
+    target_compile_definitions(example_pdf PRIVATE PDF_PREVIEW_MOBILE_SMOKE=1)
 endif()
 target_compile_options(example_pdf PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 target_include_directories(example_pdf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
