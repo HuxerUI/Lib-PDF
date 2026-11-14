@@ -46,7 +46,10 @@ sed -i '' \
 /usr/libexec/PlistBuddy -c 'Add :CFBundleSupportedPlatforms array' "$app/Info.plist"
 /usr/libexec/PlistBuddy -c 'Add :CFBundleSupportedPlatforms:0 string iPhoneSimulator' "$app/Info.plist"
 
-xcrun --sdk iphonesimulator clang++ \
+pdfium=$(find "$core_build" -path '*/pdfium-runtime/libpdfium.dylib' -print -quit)
+test -n "$pdfium"
+
+if ! xcrun --sdk iphonesimulator clang++ \
     -arch "$arch" \
     -mios-simulator-version-min=17.0 \
     -isysroot "$SDKROOT" \
@@ -55,16 +58,19 @@ xcrun --sdk iphonesimulator clang++ \
     -I "$HUXERUI_HOME/include" \
     "$project/platform/ios/App/main.mm" \
     @"$core_dir/link.rsp" \
+    "$pdfium" \
     -Wl,-rpath,@executable_path/Frameworks \
-    -o "$app/PDF Preview"
+    -o "$app/PDF Preview"; then
+    echo "link.rsp:" >&2
+    cat "$core_dir/link.rsp" >&2
+    exit 1
+fi
 
 resources="$core_build/huxerui-ios/example_pdf/resources/package"
 test -f "$resources/huxerui/resources.bin"
 mkdir -p "$app/HuxerUI"
 cp -R "$resources/." "$app/HuxerUI/"
 
-pdfium=$(find "$core_build" -path '*/pdfium-runtime/libpdfium.dylib' -print -quit)
-test -n "$pdfium"
 cp "$pdfium" "$app/Frameworks/libpdfium.dylib"
 
 codesign --force --sign - "$app/Frameworks/libpdfium.dylib"
