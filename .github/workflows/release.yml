@@ -104,8 +104,10 @@ jobs:
           set -euo pipefail
           app="build-release/example_pdf.app"
           test -d "$app"
+          pdfium=$(find build-release -path '*/pdfium-runtime/libpdfium.dylib' -print -quit)
+          test -n "$pdfium"
           mkdir -p "$app/Contents/Frameworks"
-          cp build-release/pdfium-runtime/libpdfium.dylib "$app/Contents/Frameworks/libpdfium.dylib"
+          cp "$pdfium" "$app/Contents/Frameworks/libpdfium.dylib"
           install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/example_pdf" 2>/dev/null || true
           codesign --force --deep --sign - "$app"
           stage="release/pdf-preview-macos-arm64"

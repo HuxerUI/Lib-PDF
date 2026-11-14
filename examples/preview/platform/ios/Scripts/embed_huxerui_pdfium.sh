@@ -1,8 +1,8 @@
 set -eu
 
-PDFIUM_SOURCE="$HUXERUI_CORE_BUILD_DIR/pdfium-runtime/libpdfium.dylib"
-if [ ! -f "$PDFIUM_SOURCE" ]; then
-  echo "error: PDFium dylib is missing: $PDFIUM_SOURCE" >&2
+PDFIUM_SOURCE=$(find "$HUXERUI_CORE_BUILD_DIR" -path '*/pdfium-runtime/libpdfium.dylib' -print -quit)
+if [ -z "$PDFIUM_SOURCE" ] || [ ! -f "$PDFIUM_SOURCE" ]; then
+  echo "error: PDFium dylib is missing under $HUXERUI_CORE_BUILD_DIR" >&2
   exit 1
 fi
 if [ -z "${FRAMEWORKS_FOLDER_PATH:-}" ]; then
