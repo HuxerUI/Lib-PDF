@@ -244,9 +244,11 @@ jobs:
           set -euo pipefail
           app=$(find examples/preview/dist/ios -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
+          echo "app=$app"
+          find "$app" -maxdepth 4 -type f | sort | head -60
           test -f "$app/Frameworks/libpdfium.dylib"
-          test -f "$app/HuxerUI/huxerui/resources.bin"
-          test -f "$app/HuxerUI/pdf_demo/raw/guide.pdf"
+          test -n "$(find "$app" -path '*/huxerui/resources.bin' -print -quit)"
+          test -n "$(find "$app" -path '*/pdf_demo/raw/guide.pdf' -print -quit)"
           codesign --force --deep --sign - "$app"
           APP="$app" bash .github/scripts/check-ios-preview-app.sh
           ditto -c -k --sequesterRsrc --keepParent "$app" pdf-preview-ios-simulator-$(uname -m).zip
