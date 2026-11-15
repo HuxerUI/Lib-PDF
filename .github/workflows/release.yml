@@ -77,10 +77,26 @@ jobs:
           Copy-Item "third_party/pdfium" $stage -Recurse
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          $crt = Get-ChildItem (Join-Path $vs "VC/Redist/MSVC") -Recurse -Filter "msvcp140.dll" |
-            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
-          if (-not $crt) { throw "MSVC x64 redistributable DLLs were not found" }
-          Copy-Item (Join-Path $crt.DirectoryName "*.dll") $stage
+          $redistRoot = Join-Path $vs "VC/Redist/MSVC"
+          $toolset = Get-ChildItem (Join-Path $vs "VC/Tools/MSVC") -Directory |
+            Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+            Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $redist = $null
+          if ($toolset) {
+            $candidate = Join-Path $redistRoot $toolset.Name
+            if (Test-Path $candidate) { $redist = Get-Item $candidate }
+          }
+          if (-not $redist) {
+            $redist = Get-ChildItem $redistRoot -Directory |
+              Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+              Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          }
+          if (-not $redist) { throw "MSVC redistributable directory was not found" }
+          $crt = Get-ChildItem (Join-Path $redist.FullName "x64") -Directory -Filter "Microsoft.VC*.CRT" |
+            Select-Object -First 1
+          if (-not $crt) { throw "MSVC x64 redistributable DLLs were not found under $($redist.FullName)" }
+          Write-Host "Bundling MSVC runtime from $($crt.FullName)"
+          Copy-Item (Join-Path $crt.FullName "*.dll") $stage
           Compress-Archive -Path "$stage/*" -DestinationPath "pdf-preview-windows-x64.zip" -Force
       - name: Package Linux preview
         if: runner.os == 'Linux'
