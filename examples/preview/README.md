@@ -63,7 +63,8 @@ Android, and iOS Simulator entry points. A Web preview is not supplied.
 The repository root `VERSION` file is the single source of truth for the
 application version. CMake reads it for `project(...)` and for the compiled
 `PDF_PREVIEW_VERSION` / `PDF_PREVIEW_PLATFORM` labels shown in the window title
-and status bar (`v0.2.0 · Windows`). It also flows into:
+and under the header (`v0.2.0 · Windows`). Desktop builds answer
+`example_pdf --version` with `PDF Preview 0.2.0 (Windows)`. It also flows into:
 
 - the Windows executable's `FileVersion`/`ProductVersion` resource,
 - the macOS `CFBundleShortVersionString`/`CFBundleVersion`,

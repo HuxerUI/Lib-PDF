@@ -156,8 +156,9 @@ jobs:
             'LD_LIBRARY_PATH="$here${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$here/example_pdf" "$@"' > "$stage/pdf-preview"
           chmod +x "$stage/pdf-preview"
           test "$(cat "$stage/VERSION")" = "$PDF_PREVIEW_VERSION"
-          grep -aqF "v${PDF_PREVIEW_VERSION} · Linux" "$stage/example_pdf" || {
-            echo "compiled binary is missing the ${PDF_PREVIEW_VERSION} version label" >&2
+          reported=$(cd "$stage" && LD_LIBRARY_PATH=. ./example_pdf --version)
+          test "$reported" = "PDF Preview ${PDF_PREVIEW_VERSION} (Linux)" || {
+            echo "compiled binary reports '$reported' instead of the packaged version" >&2
             exit 1
           }
           tar -C release -czf "$archive" "$(basename "$stage")"
@@ -178,6 +179,13 @@ jobs:
           codesign --force --deep --sign - "$app"
           plist_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
           test "$plist_version" = "$PDF_PREVIEW_VERSION"
+          if [[ "$(uname -m)" == "${{ matrix.arch }}" ]]; then
+            reported=$("$app/Contents/MacOS/example_pdf" --version)
+            test "$reported" = "PDF Preview ${PDF_PREVIEW_VERSION} (macOS)" || {
+              echo "compiled binary reports '$reported' instead of the packaged version" >&2
+              exit 1
+            }
+          fi
           stage="release/${APP_NAME}-${PDF_PREVIEW_VERSION}-${{ matrix.name }}"
           mkdir -p "$stage"
           cp -R "$app" "$stage/"
@@ -280,10 +288,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: |
-            APK="$(ls pdf-preview-*-android-x86_64.apk)" \
-            EXPECTED_VERSION="$(tr -d '[:space:]' < VERSION)" \
-            bash .github/scripts/check-android-preview-app.sh
+          script: APK="$(ls pdf-preview-*-android-x86_64.apk)" EXPECTED_VERSION="$(tr -d '[:space:]' < VERSION)" bash .github/scripts/check-android-preview-app.sh
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}-android-${{ matrix.abi }}
