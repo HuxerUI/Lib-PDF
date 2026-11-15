@@ -29,7 +29,12 @@ xcrun simctl launch "$simulator" "$PREVIEW_ID"
 for attempt in {1..30}; do
     if [[ -f "$result_file" ]]; then
         result=$(cat "$result_file")
-        if printf '%s' "$result" | grep -Eq '^The PDF field guide\|3\|0\|[0-9]+x[0-9]+$'; then
+        if [[ -n "${EXPECTED_VERSION:-}" ]]; then
+            expected_pattern="^The PDF field guide\\|3\\|0\\|[0-9]+x[0-9]+\\|v${EXPECTED_VERSION//./\\.} · iOS$"
+        else
+            expected_pattern='^The PDF field guide\|3\|0\|[0-9]+x[0-9]+'
+        fi
+        if printf '%s' "$result" | grep -Eq "$expected_pattern"; then
             echo "$result"
             exit 0
         fi

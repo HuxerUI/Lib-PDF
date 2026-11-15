@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version for the tag (for example 0.1.0)
+        description: Release version for the tag (for example 0.2.0)
         required: true
-        default: "0.1.0"
+        default: "0.2.0"
       create_release:
         description: Create or update a GitHub release and attach the built artifacts
         required: true
@@ -21,6 +21,7 @@ permissions:
 
 env:
   HUXERUI_REVISION: cadb1696cfa7b87d9d2d316b3ecba07b85a46962
+  APP_NAME: pdf-preview
 
 jobs:
   desktop:
@@ -33,13 +34,21 @@ jobs:
         include:
           - name: windows-x64
             os: windows-latest
-            archive: pdf-preview-windows-x64.zip
-          - name: linux-x64
+            archive: zip
+          - name: linux-x86_64
             os: ubuntu-latest
-            archive: pdf-preview-linux-x64.tar.gz
+            archive: tar.gz
+          - name: linux-aarch64
+            os: ubuntu-24.04-arm
+            archive: tar.gz
           - name: macos-arm64
             os: macos-15
-            archive: pdf-preview-macos-arm64.zip
+            arch: arm64
+            archive: zip
+          - name: macos-x86_64
+            os: macos-15
+            arch: x86_64
+            archive: zip
     steps:
       - uses: actions/checkout@v4
       - name: Check out verified HuxerUI revision
@@ -60,19 +69,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config \
             libgtk-4-dev libepoxy-dev libsoup-3.0-dev libpango1.0-dev libfontconfig1-dev libglib2.0-dev
+      - name: Resolve project version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION | tr -d '[:space:]')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION is not a semantic version: $version" >&2; exit 1; }
+          echo "PDF_PREVIEW_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Building ${APP_NAME} ${version} for ${{ matrix.name }}"
       - name: Configure preview
-        run: cmake -S examples/preview -B build-release -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=()
+          if [[ -n "${{ matrix.arch }}" ]]; then
+            extra+=("-DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}")
+          fi
+          cmake -S examples/preview -B build-release -DCMAKE_BUILD_TYPE=Release \
+            -DHUXERUI_HOME="${{ github.workspace }}/.cache/HuxerUI" "${extra[@]}"
       - name: Build preview
         run: cmake --build build-release --config Release --target example_pdf --parallel 2
       - name: Package Windows preview
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $stage = "release/pdf-preview-windows-x64"
+          $ErrorActionPreference = 'Stop'
+          $archive = "$env:APP_NAME-$env:PDF_PREVIEW_VERSION-windows-x64.zip"
+          $stage = "release/$env:APP_NAME-$env:PDF_PREVIEW_VERSION-windows-x64"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item "build-release/Release/example_pdf.exe" $stage
           Copy-Item "build-release/Release/pdfium.dll" $stage
           Copy-Item "build-release/Release/example_pdf.resources" $stage -Recurse
+          Copy-Item "VERSION" $stage
           Copy-Item "LICENSE" $stage
           Copy-Item "third_party/pdfium" $stage -Recurse
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -97,16 +125,28 @@ jobs:
           if (-not $crt) { throw "MSVC x64 redistributable DLLs were not found under $($redist.FullName)" }
           Write-Host "Bundling MSVC runtime from $($crt.FullName)"
           Copy-Item (Join-Path $crt.FullName "*.dll") $stage
-          Compress-Archive -Path "$stage/*" -DestinationPath "pdf-preview-windows-x64.zip" -Force
+          $exe = Join-Path $stage "example_pdf.exe"
+          $fileVersion = (Get-Item $exe).VersionInfo.FileVersion
+          if ($fileVersion -ne $env:PDF_PREVIEW_VERSION) {
+            throw "exe FileVersion $fileVersion does not match VERSION $env:PDF_PREVIEW_VERSION"
+          }
+          $productVersion = (Get-Item $exe).VersionInfo.ProductVersion
+          if ($productVersion -ne $env:PDF_PREVIEW_VERSION) {
+            throw "exe ProductVersion $productVersion does not match VERSION $env:PDF_PREVIEW_VERSION"
+          }
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive -Force
+          Get-Item $archive | Select-Object Name,Length
       - name: Package Linux preview
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          stage="release/pdf-preview-linux-x64"
+          archive="${APP_NAME}-${PDF_PREVIEW_VERSION}-${{ matrix.name }}.tar.gz"
+          stage="release/${APP_NAME}-${PDF_PREVIEW_VERSION}-${{ matrix.name }}"
           mkdir -p "$stage"
           cp build-release/example_pdf "$stage/"
           cp -r build-release/example_pdf.resources "$stage/"
+          cp VERSION "$stage/"
           pdfium=$(find build-release/_deps -path '*/lib/libpdfium.so' -print -quit)
           test -n "$pdfium"
           cp "$pdfium" "$stage/libpdfium.so"
@@ -115,12 +155,19 @@ jobs:
           printf '%s\n' '#!/bin/sh' 'here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)' \
             'LD_LIBRARY_PATH="$here${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$here/example_pdf" "$@"' > "$stage/pdf-preview"
           chmod +x "$stage/pdf-preview"
-          tar -C release -czf pdf-preview-linux-x64.tar.gz pdf-preview-linux-x64
+          test "$(cat "$stage/VERSION")" = "$PDF_PREVIEW_VERSION"
+          grep -aqF "v${PDF_PREVIEW_VERSION} · Linux" "$stage/example_pdf" || {
+            echo "compiled binary is missing the ${PDF_PREVIEW_VERSION} version label" >&2
+            exit 1
+          }
+          tar -C release -czf "$archive" "$(basename "$stage")"
+          ls -lh "$archive"
       - name: Package macOS preview
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
+          archive="${APP_NAME}-${PDF_PREVIEW_VERSION}-${{ matrix.name }}.zip"
           app="build-release/example_pdf.app"
           test -d "$app"
           pdfium=$(find build-release -path '*/pdfium-runtime/libpdfium.dylib' -print -quit)
@@ -129,22 +176,30 @@ jobs:
           cp "$pdfium" "$app/Contents/Frameworks/libpdfium.dylib"
           install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/example_pdf" 2>/dev/null || true
           codesign --force --deep --sign - "$app"
-          stage="release/pdf-preview-macos-arm64"
+          plist_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          test "$plist_version" = "$PDF_PREVIEW_VERSION"
+          stage="release/${APP_NAME}-${PDF_PREVIEW_VERSION}-${{ matrix.name }}"
           mkdir -p "$stage"
           cp -R "$app" "$stage/"
+          cp VERSION "$stage/"
           cp LICENSE "$stage/"
           cp -r third_party/pdfium "$stage/"
-          ditto -c -k --sequesterRsrc --keepParent "$stage" pdf-preview-macos-arm64.zip
+          ditto -c -k --sequesterRsrc --keepParent "$stage" "$archive"
+          ls -lh "$archive"
       - uses: actions/upload-artifact@v4
         with:
-          name: pdf-preview-${{ matrix.name }}
-          path: ${{ matrix.archive }}
+          name: ${{ env.APP_NAME }}-${{ matrix.name }}
+          path: ${{ env.APP_NAME }}-*-${{ matrix.name }}.${{ matrix.archive }}
           if-no-files-found: error
 
   android:
-    name: Android APK
+    name: Android APK (${{ matrix.abi }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, x86_64]
     steps:
       - uses: actions/checkout@v4
       - name: Check out verified HuxerUI revision
@@ -163,6 +218,12 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK components
         run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;29.0.14206865' 'cmake;3.22.1'
+      - name: Resolve project version
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION | tr -d '[:space:]')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION is not a semantic version: $version" >&2; exit 1; }
+          echo "PDF_PREVIEW_VERSION=$version" >> "$GITHUB_ENV"
       - name: Build HuxerUI CLI
         run: |
           cmake -S .cache/HuxerUI/tools/huxerui_cli -B build-huxerui-cli -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -171,44 +232,62 @@ jobs:
         run: chmod +x examples/preview/platform/android/gradlew
       - name: Package installable Android preview
         env:
-          ORG_GRADLE_PROJECT_huxeruiAbis: arm64-v8a,x86_64
+          ORG_GRADLE_PROJECT_huxeruiAbis: ${{ matrix.abi }}
         run: ./build-huxerui-cli/huxerui package android --profile release --source .cache/HuxerUI
       - name: Verify the APK
-        shell: bash
+        env:
+          EXPECTED_ABI: ${{ matrix.abi }}
         run: |
           set -euo pipefail
           apk=$(find examples/preview/dist/android -maxdepth 1 -name '*.apk' -print -quit)
           test -n "$apk"
+          stage="pdf-preview-${PDF_PREVIEW_VERSION}-android-${EXPECTED_ABI}.apk"
+          cp "$apk" "$stage"
           entries="$RUNNER_TEMP/pdf-preview-apk-entries"
-          unzip -Z1 "$apk" > "$entries"
-          grep -Fx 'lib/arm64-v8a/libexample_pdf.so' "$entries"
-          grep -Fx 'lib/arm64-v8a/libhuxerui.so' "$entries"
-          grep -Fx 'lib/arm64-v8a/libpdfium.so' "$entries"
-          grep -Fx 'lib/x86_64/libexample_pdf.so' "$entries"
-          grep -Fx 'lib/x86_64/libhuxerui.so' "$entries"
-          grep -Fx 'lib/x86_64/libpdfium.so' "$entries"
+          unzip -Z1 "$stage" > "$entries"
+          for lib in libexample_pdf.so libhuxerui.so libpdfium.so; do
+            grep -Fx "lib/${EXPECTED_ABI}/${lib}" "$entries"
+          done
           grep -Fx 'assets/huxerui/resources.bin' "$entries"
           grep -Fx 'assets/huxerui/pdf_demo/raw/guide.pdf' "$entries"
-          cp "$apk" pdf-preview-android.apk
+          test "$(awk -F/ '/^lib\/.*\.so$/ {print $2}' "$entries" | sort -u)" = "$EXPECTED_ABI"
+          aapt2="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 -print | sort -V | tail -n 1)"
+          test -n "$aapt2"
+          badging="$("$aapt2" dump badging "$stage")"
+          printf '%s\n' "$badging" | grep -Fq "versionName='${PDF_PREVIEW_VERSION}'" || {
+            echo "APK versionName does not match ${PDF_PREVIEW_VERSION}" >&2
+            printf '%s\n' "$badging" | head -1 >&2
+            exit 1
+          }
+          expected_code=$(( $(cut -d. -f1 <<< "$PDF_PREVIEW_VERSION") * 10000 + $(cut -d. -f2 <<< "$PDF_PREVIEW_VERSION") * 100 + $(cut -d. -f3 <<< "$PDF_PREVIEW_VERSION") ))
+          printf '%s\n' "$badging" | grep -Fq "versionCode='${expected_code}'" || {
+            echo "APK versionCode does not match ${expected_code}" >&2
+            printf '%s\n' "$badging" | head -1 >&2
+            exit 1
+          }
+          ls -lh "$stage"
       - name: Enable Android emulator acceleration
+        if: matrix.abi == 'x86_64'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Launch the packaged preview
+        if: matrix.abi == 'x86_64'
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          APK: pdf-preview-android.apk
         with:
           api-level: 36
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: bash .github/scripts/check-android-preview-app.sh
+          script: |
+            APK="$(ls pdf-preview-*-android-x86_64.apk)" \
+            EXPECTED_VERSION="$(tr -d '[:space:]' < VERSION)" \
+            bash .github/scripts/check-android-preview-app.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: pdf-preview-android
-          path: pdf-preview-android.apk
+          name: ${{ env.APP_NAME }}-android-${{ matrix.abi }}
+          path: pdf-preview-*-android-${{ matrix.abi }}.apk
           if-no-files-found: error
 
   ios:
@@ -228,6 +307,12 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           sudo xcodebuild -license accept
           sudo xcodebuild -runFirstLaunch
+      - name: Resolve project version
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION | tr -d '[:space:]')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION is not a semantic version: $version" >&2; exit 1; }
+          echo "PDF_PREVIEW_VERSION=$version" >> "$GITHUB_ENV"
       - name: Build the Simulator app
         timeout-minutes: 25
         env:
@@ -260,18 +345,24 @@ jobs:
           set -euo pipefail
           app=$(find examples/preview/dist/ios -maxdepth 1 -name '*.app' -print -quit)
           test -n "$app"
-          echo "app=$app"
-          find "$app" -maxdepth 4 -type f | sort | head -60
           test -f "$app/Frameworks/libpdfium.dylib"
           test -n "$(find "$app" -path '*/huxerui/resources.bin' -print -quit)"
           test -n "$(find "$app" -path '*/pdf_demo/raw/guide.pdf' -print -quit)"
+          plist_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")
+          test "$plist_version" = "$PDF_PREVIEW_VERSION" || {
+            echo "CFBundleShortVersionString $plist_version does not match VERSION $PDF_PREVIEW_VERSION" >&2
+            exit 1
+          }
+          test "$(cat "$app/VERSION")" = "$PDF_PREVIEW_VERSION"
           codesign --force --deep --sign - "$app"
-          APP="$app" bash .github/scripts/check-ios-preview-app.sh
-          ditto -c -k --sequesterRsrc --keepParent "$app" pdf-preview-ios-simulator-$(uname -m).zip
+          APP="$app" EXPECTED_VERSION="$PDF_PREVIEW_VERSION" bash .github/scripts/check-ios-preview-app.sh
+          archive="${APP_NAME}-${PDF_PREVIEW_VERSION}-ios-simulator-$(uname -m).zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
+          ls -lh "$archive"
       - uses: actions/upload-artifact@v4
         with:
-          name: pdf-preview-ios-simulator
-          path: pdf-preview-ios-simulator-*.zip
+          name: ${{ env.APP_NAME }}-ios-simulator
+          path: pdf-preview-*-ios-simulator-*.zip
           if-no-files-found: error
 
   release:
@@ -285,6 +376,7 @@ jobs:
     needs: [desktop, android, ios]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Determine release tag
         id: release_tag
         shell: bash
@@ -296,30 +388,31 @@ jobs:
           fi
       - uses: actions/download-artifact@v4
         with:
-          pattern: pdf-preview-*
+          pattern: ${{ env.APP_NAME }}-*
           merge-multiple: true
           path: dist
       - name: List release assets
         shell: bash
-        run: find dist -maxdepth 2 -type f | sort
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.release_tag.outputs.tag }}
-          name: PDF Preview ${{ steps.release_tag.outputs.tag }}
-          generate_release_notes: true
-          body: |
-            Multi-platform build of the Lib-PDF preview application.
-
-            Artifacts:
-            - Windows x64: `pdf-preview-windows-x64.zip` (exe, resources, PDFium DLL, licenses)
-            - Linux x64: `pdf-preview-linux-x64.tar.gz` (launcher, resources, PDFium, licenses)
-            - macOS arm64: `pdf-preview-macos-arm64.zip` (.app bundle, PDFium embedded)
-            - Android: `pdf-preview-android.apk` (debug-signed, arm64-v8a + x86_64)
-            - iOS Simulator: `pdf-preview-ios-simulator-*.zip` (.app bundle for the Simulator)
-
-            Linux runs require the GTK4 and related system libraries used by HuxerUI.
-            The macOS app is ad-hoc signed and not notarized.
-          files: |
-            dist/**/*.zip
-            dist/**/*.tar.gz
-            dist/**/*.apk
+        run: find dist -maxdepth 1 -type f | sort
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="docs/releases/${TAG}.md"
+          if [[ -f "$notes" ]]; then
+            note_args=(--notes-file "$notes")
+          else
+            note_args=(--generate-notes)
+          fi
+          shopt -s nullglob
+          assets=(dist/*)
+          test "${#assets[@]}" -gt 0
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG" --title "PDF Preview $TAG" "${note_args[@]}" "${assets[@]}"
+          fi

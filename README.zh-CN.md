@@ -143,9 +143,15 @@ Android/iOS Simulator 文档层，以及 Windows 会话与 demo；测试覆盖�
 
 默认下载固定 PDFium `chromium/8138` 非 V8 版本并校验 SHA-256，覆盖 Android arm64-v8a/x86_64
 与 iOS arm64 真机及 arm64/x86_64 模拟器。macOS SDK 要求 13、iOS SDK 要求 17 及以上。
-移动工作流在 Android x86_64 模拟器和 iOS Simulator 上运行文档测试；release 工作流为
-Windows、Linux、macOS、Android 与 iOS Simulator 打包 demo 及对应 PDFium 运行库。
-真机与其他 Android ABI 尚未覆盖。
+移动工作流在 Android x86_64 模拟器和 iOS Simulator 上运行文档测试；release 工作流发布
+带版本号的 Windows x64、Linux x86_64/aarch64、macOS arm64/x86_64、Android
+arm64-v8a/x86_64 与 iOS Simulator 包，并附带对应 PDFium 运行库。真机与 32 位
+Android ABI 尚未覆盖。
+
+仓库根 `VERSION` 是唯一版本来源：库与 demo 的 CMake 都读取它，release 工作流把版本写入
+每个包（Windows 版本资源、macOS/iOS bundle 版本、Android `versionName`/`versionCode`
+以及包内 `VERSION` 文件）。发行包文件名带版本与平台，存在 `docs/releases/<tag>.md`
+时作为发布说明。
 
 离线可设置 `HUXERUI_PDF_FETCH_PDFIUM=OFF` 和 `HUXERUI_PDF_PDFIUM_ROOT=/path/to/pdfium`。
 发布应用时需部署 PDFium 动态库、资源包与完整许可证。支持范围和完整部署说明见 [英文文档](README.md)。

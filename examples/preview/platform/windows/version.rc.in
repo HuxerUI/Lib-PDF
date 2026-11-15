@@ -1,0 +1,30 @@
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PDF_PREVIEW_VERSION_COMMAS@,0
+ PRODUCTVERSION @PDF_PREVIEW_VERSION_COMMAS@,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "HuxerUI"
+            VALUE "FileDescription", "PDF Preview"
+            VALUE "FileVersion", "@PDF_PREVIEW_VERSION@"
+            VALUE "InternalName", "example_pdf"
+            VALUE "LegalCopyright", "MIT License"
+            VALUE "OriginalFilename", "example_pdf.exe"
+            VALUE "ProductName", "PDF Preview"
+            VALUE "ProductVersion", "@PDF_PREVIEW_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

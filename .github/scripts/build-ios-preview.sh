@@ -6,10 +6,22 @@ set -euo pipefail
 root=$(pwd)
 project="$root/examples/preview"
 core_build="$root/build-ios-core"
+version=$(tr -d '\r\n' < "$root/VERSION")
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    echo "error: VERSION is not a semantic version: $version" >&2
+    exit 1
+}
+xcconfig_version=$(sed -n 's/^MARKETING_VERSION = //p' "$project/platform/ios/Config/Base.xcconfig")
+[[ "$xcconfig_version" == "$version" ]] || {
+    echo "error: Base.xcconfig MARKETING_VERSION ($xcconfig_version) does not match VERSION ($version)" >&2
+    exit 1
+}
 arch=$(uname -m)
 if [[ "$arch" != "arm64" ]]; then
     arch=x86_64
 fi
+IFS=. read -r version_major version_minor version_patch <<< "$version"
+version_code=$((version_major * 10000 + version_minor * 100 + version_patch))
 
 export HUXERUI_PROJECT_ROOT="$project"
 export HUXERUI_CORE_BUILD_DIR="$core_build"
@@ -35,8 +47,8 @@ sed -i '' \
     -e 's/\$(EXECUTABLE_NAME)/PDF Preview/g' \
     -e 's/\$(PRODUCT_BUNDLE_IDENTIFIER)/org.huxerui.lib.pdf.preview/g' \
     -e 's/\$(PRODUCT_NAME)/PDF Preview/g' \
-    -e 's/\$(MARKETING_VERSION)/0.1.0/g' \
-    -e 's/\$(CURRENT_PROJECT_VERSION)/1/g' \
+    -e 's/\$(MARKETING_VERSION)/'"$version"'/g' \
+    -e 's/\$(CURRENT_PROJECT_VERSION)/'"$version_code"'/g' \
     "$app/Info.plist"
 /usr/libexec/PlistBuddy -c 'Delete :UILaunchStoryboardName' "$app/Info.plist"
 /usr/libexec/PlistBuddy -c 'Add :MinimumOSVersion string 17.0' "$app/Info.plist"
@@ -72,6 +84,7 @@ mkdir -p "$app/HuxerUI"
 cp -R "$resources/." "$app/HuxerUI/"
 
 cp "$pdfium" "$app/Frameworks/libpdfium.dylib"
+cp "$root/VERSION" "$app/VERSION"
 
 codesign --force --sign - "$app/Frameworks/libpdfium.dylib"
 codesign --force --deep --sign - "$app"

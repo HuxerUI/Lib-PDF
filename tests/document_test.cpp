@@ -1,4 +1,5 @@
 #include <huxerui/pdf/document.h>
+#include <huxerui/pdf/version.h>
 #include <atomic>
 #include <fstream>
 #include <iterator>
@@ -11,6 +12,7 @@ using namespace huxerui::pdf;
 namespace fs = std::filesystem;
 
 int main() { return Run([] {
+  CHECK(Version() == std::string_view(PDF_EXPECTED_VERSION));
   const fs::path fixtures(PDF_FIXTURE_DIR);
   const auto doc = PdfDocument::Open(fixtures / "sample.pdf");
   CHECK(doc.PageCount() == 2);

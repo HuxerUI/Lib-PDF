@@ -207,9 +207,17 @@ arm64 device plus arm64/x86_64 Simulator. Other architectures, musl, Android
 
 The mobile workflow builds the document backend for Android arm64-v8a/x86_64 and
 the iOS Simulator, then runs the document tests on an Android x86_64 emulator and
-an iOS Simulator. The release workflow packages the preview for Windows, Linux,
-macOS, Android, and the iOS Simulator with the matching PDFium runtime. Physical
-devices and other Android ABIs are not covered.
+an iOS Simulator. The release workflow publishes versioned packages for Windows
+x64, Linux x86_64/aarch64, macOS arm64/x86_64, Android arm64-v8a/x86_64, and the
+iOS Simulator with the matching PDFium runtime. Physical devices and 32-bit
+Android ABIs are not covered.
+
+The repository `VERSION` file is the single version source. CMake reads it for
+both the library and the preview, and the release workflow embeds it in every
+package (Windows version resource, macOS and iOS bundle versions, Android
+`versionName`/`versionCode`, and a staged `VERSION` file). Archive names include
+the version and platform, and `docs/releases/<tag>.md` supplies the release
+notes when present.
 
 The pinned macOS and iOS SDKs require macOS 13 and iOS 17 respectively. CMake
 normalizes and ad-hoc signs a build-local copy of the dylib for `@rpath` loading,

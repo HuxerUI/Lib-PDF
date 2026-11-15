@@ -3,7 +3,9 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_SYSTEM_NAME AND NOT CMAKE_TOOLCHAIN_FILE
         AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET AND "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS deployment target (pinned PDFium SDK)")
 endif()
-project(lib_pdf VERSION 0.1.0 LANGUAGES NONE)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" LIB_PDF_VERSION LIMIT_COUNT 1)
+string(STRIP "${LIB_PDF_VERSION}" LIB_PDF_VERSION)
+project(lib_pdf VERSION ${LIB_PDF_VERSION} LANGUAGES NONE)
 
 option(HUXERUI_PDF_BUILD_VIEW "Build HuxerUI PDF components" ON)
 option(HUXERUI_PDF_BUILD_TESTS "Build PDF tests" OFF)
@@ -13,7 +15,7 @@ if(HUXERUI_PROJECT_PLAN_ONLY)
     return()
 endif()
 
-set(_pdf_sources src/document.cpp src/png.cpp)
+set(_pdf_sources src/document.cpp src/png.cpp src/version.cpp)
 if(HUXERUI_PDF_BUILD_VIEW)
     huxerui_add_library(huxerui_pdf SOURCES src/pdf.cpp ${_pdf_sources})
 else()
@@ -31,7 +33,7 @@ target_include_directories(huxerui_pdf PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>")
 target_link_libraries(huxerui_pdf PRIVATE PDFium::PDFium)
-target_compile_definitions(huxerui_pdf PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_definitions(huxerui_pdf PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN HUXERUI_PDF_VERSION="${PROJECT_VERSION}")
 target_compile_options(huxerui_pdf PRIVATE
     "$<$<CXX_COMPILER_ID:MSVC>:/utf-8;/W4;/permissive->"
     "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra;-Wpedantic>")

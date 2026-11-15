@@ -3,6 +3,7 @@
 #include <huxerui/data.h>
 #include <huxerui/file.h>
 #include <huxerui/pdf/document.h>
+#include <huxerui/pdf/version.h>
 #include <huxerui/resource.h>
 #include <huxerui/task.h>
 #include <huxerui/view.h>

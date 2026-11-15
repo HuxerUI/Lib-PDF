@@ -11,6 +11,21 @@ using namespace huxerui::pdf;
 
 namespace {
 
+#ifndef PDF_PREVIEW_VERSION
+#define PDF_PREVIEW_VERSION "0.0.0"
+#endif
+#ifndef PDF_PREVIEW_PLATFORM
+#define PDF_PREVIEW_PLATFORM "Unknown"
+#endif
+
+/// Full identity as one literal so packaged binaries can be grepped for it.
+constexpr std::string_view kBuildLabel = "v" PDF_PREVIEW_VERSION " · " PDF_PREVIEW_PLATFORM;
+
+/// Short identity shown under the title: version and build platform.
+std::string BuildLabel() {
+  return std::string(kBuildLabel);
+}
+
 #ifdef PDF_PREVIEW_MOBILE_SMOKE
 void ReportMobileSmoke(const ApplicationHandle& application, const PdfSnapshot& snapshot) {
   if (snapshot.status != PdfStatus::Ready || !snapshot.output || !snapshot.output->image.HasValue()) return;
@@ -20,7 +35,7 @@ void ReportMobileSmoke(const ApplicationHandle& application, const PdfSnapshot& 
   (void)result.WriteString(std::string("The PDF field guide|") +
       std::to_string(snapshot.metadata ? snapshot.metadata->pages : 0) + "|" +
       std::to_string(snapshot.output->page) + "|" +
-      std::to_string(image.PixelWidth()) + "x" + std::to_string(image.PixelHeight()));
+      std::to_string(image.PixelWidth()) + "x" + std::to_string(image.PixelHeight()) + "|" + BuildLabel());
 }
 #else
 void ReportMobileSmoke(const ApplicationHandle&, const PdfSnapshot&) {}
@@ -161,10 +176,15 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
   std::string status = snapshot.error ? snapshot.error->message : notice;
   if (snapshot.status == PdfStatus::Loading) status = "Opening document...";
   if (snapshot.status == PdfStatus::Rendering || pending_display) status = "Preparing page...";
+  const std::string build_label = BuildLabel();
+  View title_block = Column{
+      Text(pdf_demo::strings::title, TextRole::Title),
+      Text(pdf_demo::strings::subtitle, TextRole::Label),
+      Text(build_label, TextRole::Label),
+  }.With(Spacing(4.0F));
   View header = compact ?
       View(Column{
-          Column{Text(pdf_demo::strings::title, TextRole::Title),
-              Text(pdf_demo::strings::subtitle, TextRole::Label)}.With(Spacing(4.0F)),
+          std::move(title_block),
           Flow{
               Button("Open PDF").OnClick(open_document).With(Enabled{!busy && picker->CanOpenFiles()}),
               Button("Load sample").OnClick(load_sample).With(Enabled{!busy}),
@@ -172,8 +192,7 @@ Task<void> ChooseDocument(std::shared_ptr<FilePicker> picker, State<PdfSource> s
           }.With(Spacing(8.0F), CrossAlign(CrossAxisAlignment::Center)),
       }.With(Spacing(12.0F), CrossAlign(CrossAxisAlignment::Stretch))) :
       View(Row{
-          Column{Text(pdf_demo::strings::title, TextRole::Title),
-              Text(pdf_demo::strings::subtitle, TextRole::Label)}.With(Grow{}, Spacing(4.0F)),
+          std::move(title_block).With(Grow{}),
           Button("Open PDF").OnClick(open_document).With(Enabled{!busy && picker->CanOpenFiles()}),
           Button("Load sample").OnClick(load_sample).With(Enabled{!busy}),
           Button(dark ? "Light theme" : "Dark theme").OnClick(toggle_theme),
@@ -226,7 +245,8 @@ View App() {
 } // namespace
 
 const Application application{App, {
-  .window = {.title = "PDF Preview", .initial_size = {1280.0F, 860.0F}, .minimum_size = Size{960.0F, 640.0F}},
+  .window = {.title = "PDF Preview " PDF_PREVIEW_VERSION, .initial_size = {1280.0F, 860.0F},
+      .minimum_size = Size{960.0F, 640.0F}},
   .show_debug_overlay = false,
 }};
 

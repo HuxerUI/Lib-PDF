@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity name="org.huxerui.lib.pdf.preview" version="1.0.0.0" type="win32" />
+  <assemblyIdentity name="org.huxerui.lib.pdf.preview" version="@PDF_PREVIEW_VERSION@.0" type="win32" />
   <description>PDF Preview</description>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>

@@ -42,6 +42,18 @@ def huxeruiNdkVersion = huxeruiProperty("huxeruiNdkVersion")
 def huxeruiAbis = huxeruiProperty("huxeruiAbis").split(",")
 def huxeruiStl = huxeruiProperty("huxeruiStl")
 
+// The repository VERSION file is the single source for the application version.
+def versionFile = file("../../../../../VERSION")
+if (!versionFile.isFile()) {
+    throw new GradleException("Repository VERSION file is missing: ${versionFile}")
+}
+def previewVersion = versionFile.text.trim()
+if (!(previewVersion ==~ /\d+\.\d+\.\d+/)) {
+    throw new GradleException("Repository VERSION is not a semantic version: ${previewVersion}")
+}
+def (previewMajor, previewMinor, previewPatch) = previewVersion.tokenize('.').collect { it.toInteger() }
+def previewVersionCode = previewMajor * 10000 + previewMinor * 100 + previewPatch
+
 android {
     buildFeatures {
         buildConfig = true
@@ -55,8 +67,8 @@ android {
         applicationId = "org.huxerui.lib.pdf.preview"
         minSdk = huxeruiMinSdk
         targetSdk = huxeruiTargetSdk
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = previewVersionCode
+        versionName = previewVersion
 
         externalNativeBuild {
             cmake {

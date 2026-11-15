@@ -3,7 +3,9 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_SYSTEM_NAME AND NOT CMAKE_TOOLCHAIN_FILE
         AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET AND "$ENV{MACOSX_DEPLOYMENT_TARGET}" STREQUAL "")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS deployment target")
 endif()
-project(example_pdf VERSION 0.1.0 LANGUAGES NONE)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" PDF_PREVIEW_VERSION LIMIT_COUNT 1)
+string(STRIP "${PDF_PREVIEW_VERSION}" PDF_PREVIEW_VERSION)
+project(example_pdf VERSION ${PDF_PREVIEW_VERSION} LANGUAGES NONE)
 include("${CMAKE_CURRENT_SOURCE_DIR}/HuxerUIProject.cmake")
 if(HUXERUI_PROJECT_PLAN_ONLY)
     return()
@@ -50,12 +52,51 @@ option(PDF_PREVIEW_MOBILE_SMOKE "Write the first rendered sample page result for
 if(PDF_PREVIEW_MOBILE_SMOKE)
     target_compile_definitions(example_pdf PRIVATE PDF_PREVIEW_MOBILE_SMOKE=1)
 endif()
+if(WIN32)
+    set(PDF_PREVIEW_PLATFORM "Windows")
+elseif(ANDROID)
+    set(PDF_PREVIEW_PLATFORM "Android")
+elseif(IOS)
+    set(PDF_PREVIEW_PLATFORM "iOS")
+elseif(APPLE)
+    set(PDF_PREVIEW_PLATFORM "macOS")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(PDF_PREVIEW_PLATFORM "Linux")
+else()
+    set(PDF_PREVIEW_PLATFORM "Unknown")
+endif()
+target_compile_definitions(example_pdf PRIVATE
+    PDF_PREVIEW_VERSION="${PROJECT_VERSION}"
+    PDF_PREVIEW_PLATFORM="${PDF_PREVIEW_PLATFORM}")
 target_compile_options(example_pdf PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 target_include_directories(example_pdf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 if(WIN32)
-    target_sources(example_pdf PRIVATE "${HUXERUI_WINDOWS_MANIFEST}")
-elseif(APPLE)
-    set_target_properties(example_pdf PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${HUXERUI_MACOS_INFO_PLIST}")
+    string(REPLACE "." "," _pdf_preview_version_commas "${PROJECT_VERSION}")
+    set(PDF_PREVIEW_VERSION_COMMAS "${_pdf_preview_version_commas}")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/version.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+        @ONLY)
+    configure_file(
+        "${HUXERUI_WINDOWS_MANIFEST_SOURCE}"
+        "${CMAKE_CURRENT_BINARY_DIR}/app.manifest"
+        @ONLY)
+    target_sources(example_pdf PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app.manifest"
+        "${CMAKE_CURRENT_BINARY_DIR}/version.rc")
+    add_custom_command(TARGET example_pdf POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" "$<TARGET_FILE_DIR:example_pdf>/VERSION"
+        VERBATIM)
+elseif(APPLE AND NOT IOS)
+    set_target_properties(example_pdf PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${HUXERUI_MACOS_INFO_PLIST}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_custom_command(TARGET example_pdf POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../VERSION" "$<TARGET_FILE_DIR:example_pdf>/VERSION"
+        VERBATIM)
 endif()
 huxerui_pdf_copy_runtime(example_pdf)
 

@@ -3,7 +3,9 @@ set(PDF_FIXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fixtures" CACHE PATH
     "Directory containing PDF test fixtures; override for device or simulator runs")
 add_executable(pdf_document_tests document_test.cpp)
 target_link_libraries(pdf_document_tests PRIVATE HuxerUI::PDF Threads::Threads)
-target_compile_definitions(pdf_document_tests PRIVATE PDF_FIXTURE_DIR="${PDF_FIXTURE_DIR}")
+target_compile_definitions(pdf_document_tests PRIVATE
+    PDF_FIXTURE_DIR="${PDF_FIXTURE_DIR}"
+    PDF_EXPECTED_VERSION="${PROJECT_VERSION}")
 huxerui_pdf_copy_runtime(pdf_document_tests)
 add_test(NAME pdf.document COMMAND pdf_document_tests)
 set_tests_properties(pdf.document PROPERTIES TIMEOUT 60)
