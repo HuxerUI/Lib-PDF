@@ -1,0 +1,32 @@
+[package]
+namespace   = "huxerui"
+name        = "pdf"
+version     = "0.2.0"
+standard    = "c++23"
+description = "PDF document and declarative view component for HuxerUI, powered by PDFium"
+license     = "MIT"
+repo        = "https://github.com/HuxerUI/Lib-PDF"
+
+[package.metadata.huxerui]
+library   = "HuxerUI::PDF"
+name      = "pdf"
+id        = "org.huxerui.pdf"
+namespace = "huxerui::pdf"
+
+[dependencies]
+huxerui.huxerui = "0.5.5"
+compat.pdfium   = "8165"
+
+[targets.huxerui_pdf]
+kind = "lib"
+
+[lib]
+path = "modules/pdf.cppm"
+
+[build]
+sources      = []
+include_dirs = ["include"]
+defines      = ["HUXERUI_PDF_VERSION=\"0.2.0\""]
+
+[target.windows.build]
+defines = ["NOMINMAX", "WIN32_LEAN_AND_MEAN"]
