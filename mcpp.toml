@@ -1,7 +1,7 @@
 [package]
 namespace   = "huxerui"
 name        = "pdf"
-version     = "0.2.0"
+version     = "0.2.1"
 standard    = "c++23"
 description = "PDF document and declarative view component for HuxerUI, powered by PDFium"
 license     = "MIT"
@@ -26,7 +26,7 @@ path = "modules/pdf.cppm"
 [build]
 sources      = []
 include_dirs = ["include"]
-defines      = ["HUXERUI_PDF_VERSION=\"0.2.0\""]
+defines      = ["HUXERUI_PDF_VERSION=\"0.2.1\""]
 
 [target.windows.build]
 defines = ["NOMINMAX", "WIN32_LEAN_AND_MEAN"]
