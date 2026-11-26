@@ -1,6 +1,11 @@
 /build*/
 /.cache/
 /.huxerui/
+/.mcpp/
+/target/
+/mcpp.lock
+gcm.cache/
+/dist/
 /.vs/
 /.idea/
 /CMakeUserPresets.json
